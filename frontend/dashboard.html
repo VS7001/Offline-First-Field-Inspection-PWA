@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+
+<!-- ================= NETWORK STATUS ================= -->
+<div id="networkStatus"
+     style="padding:8px; font-weight:bold; margin-bottom:10px;">
+</div>
+
+<h2 id="roleTitle"></h2>
+
+<!-- ================= INSPECTOR SECTION ================= -->
+<div id="inspectorSection" style="display:none;">
+
+<h3>New Inspection</h3>
+<h4 id="stepIndicator">Step 1 of 4</h4>
+<hr>
+
+<!-- STEP 1 -->
+<div id="step1">
+    <h4>Inspection Details</h4>
+
+    <label>Inspection Type *</label><br>
+    <select id="inspection_type">
+        <option value="">Select</option>
+        <option value="Routine">Routine</option>
+        <option value="Surprise">Surprise</option>
+        <option value="Complaint Based">Complaint Based</option>
+    </select><br><br>
+
+    <label>Scheme / Project Name *</label><br>
+    <input id="scheme_name"><br><br>
+
+    <label>Work Order Number *</label><br>
+    <input id="work_order_number"><br><br>
+
+    <label>Inspection Purpose *</label><br>
+    <textarea id="inspection_purpose"></textarea><br><br>
+
+    <button onclick="validateStep1()">Next</button>
+</div>
+
+<!-- STEP 2 -->
+<div id="step2" style="display:none;">
+    <h4>Location Details</h4>
+
+    <label>State *</label><br>
+    <input id="state"><br><br>
+
+    <label>District *</label><br>
+    <input id="district"><br><br>
+
+    <label>Taluka</label><br>
+    <input id="taluka"><br><br>
+
+    <label>Village</label><br>
+    <input id="village"><br><br>
+
+    <label>Site Name *</label><br>
+    <input id="site_name"><br><br>
+
+    <label>Nearest Landmark</label><br>
+    <input id="landmark"><br><br>
+
+    <button onclick="showStep(1)">Back</button>
+    <button onclick="showStep(3)">Next</button>
+</div>
+
+<!-- STEP 3 -->
+<!-- STEP 3 -->
+<div id="step3" style="display:none;">
+    <h4>Observation Details</h4>
+
+    <label>Work Progress % *</label><br>
+    <input type="number" id="work_progress_percentage"><br><br>
+
+    <label>Quality Assessment *</label><br>
+    <select id="quality_assessment">
+        <option value="">Select</option>
+        <option value="Good">Good</option>
+        <option value="Average">Average</option>
+        <option value="Poor">Poor</option>
+    </select><br><br>
+
+    <label>Compliance Status *</label><br>
+    <select id="compliance_status">
+        <option value="">Select</option>
+        <option value="Compliant">Compliant</option>
+        <option value="Non-Compliant">Non-Compliant</option>
+    </select><br><br>
+
+    <label>Safety Status *</label><br>
+    <select id="safety_status">
+        <option value="">Select</option>
+        <option value="Safe">Safe</option>
+        <option value="Unsafe">Unsafe</option>
+    </select><br><br>
+
+    <label>Material Status *</label><br>
+    <select id="material_status">
+        <option value="">Select</option>
+        <option value="Adequate">Adequate</option>
+        <option value="Inadequate">Inadequate</option>
+    </select><br><br>
+
+    <label>Labour Status *</label><br>
+    <select id="labour_status">
+        <option value="">Select</option>
+        <option value="Sufficient">Sufficient</option>
+        <option value="Insufficient">Insufficient</option>
+    </select><br><br>
+
+    <label>Issues Observed</label><br>
+    <textarea id="issues_observed"></textarea><br><br>
+
+    <button onclick="showStep(2)">Back</button>
+    <button onclick="validateStep3()">Next</button>
+</div>
+
+<!-- STEP 4 -->
+<div id="step4" style="display:none;">
+    <h4>Evidence & Declaration</h4>
+
+    <button onclick="startCamera()">Open Camera</button><br><br>
+
+    <video id="video" width="300" autoplay style="display:none;"></video><br>
+
+    <button id="captureBtn"
+        onclick="capturePhoto()"
+        style="display:none;">
+        Capture Photo
+    </button>
+
+    <canvas id="canvas"
+        width="300"
+        height="200"
+        style="display:none;"></canvas>
+
+    <br><br>
+
+    <label>
+        <input type="checkbox" id="inspector_declaration">
+        I certify that the inspection details are correct
+    </label>
+
+    <br><br>
+
+    <button onclick="showStep(3)">Back</button>
+    <button onclick="submitInspection()">Submit Inspection</button>
+</div>
+
+<hr>
+<h4>Pending Sync (Offline)</h4>
+<div id="offlineList"></div>
+<div>
+    <button onclick="prevOfflinePage()">Previous</button>
+    <span id="offlinePageInfo"></span>
+    <button onclick="nextOfflinePage()">Next</button>
+</div>
+
+<hr>
+<h4>My Inspections</h4>
+<div id="myInspectionList"></div>
+<div>
+    <button onclick="prevSyncedPage()">Previous</button>
+    <span id="syncedPageInfo"></span>
+    <button onclick="nextSyncedPage()">Next</button>
+</div>
+
+</div>
+
+<!-- ================= ADMIN SECTION ================= -->
+<div id="adminSection" style="display:none;">
+    <h3>All Inspections</h3>
+    <button onclick="loadAllInspections()">Refresh</button>
+
+    <h4>Pending</h4>
+    <div id="pendingList"></div>
+
+    <h4>Approved</h4>
+    <div id="approvedList"></div>
+
+    <h4>Rejected</h4>
+    <div id="rejectedList"></div>
+</div>
+
+<!-- ================= SHARED MODAL ================= -->
+<div id="inspectionModal"
+style="
+    display:none;
+    position:fixed;
+    top:5%;
+    left:15%;
+    width:70%;
+    max-height:85vh;
+    overflow-y:auto;
+    background:white;
+    border:2px solid black;
+    padding:20px;
+    z-index:1000;
+    box-shadow:0 0 10px rgba(0,0,0,0.5);
+">
+    <h3>Inspection Details</h3>
+    <div id="modalContent"></div>
+    <br>
+    <button onclick="closeModal()">Close</button>
+</div>
+
+<br><br>
+<button onclick="logout()">Logout</button>
+
+<script src="script.js"></script>
+</body>
+</html>
