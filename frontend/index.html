@@ -2,6 +2,36 @@
 <html>
 <head>
     <title>Login</title>
+    <link rel="icon" href="data:,">
+    <style>
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #333;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 9999;
+        opacity: 0.95;
+        animation: fadeInOut 3s forwards;
+    }
+
+    .toast.success { background: #28a745; }
+    .toast.error { background: #dc3545; }
+    .toast.warning { background: #ffc107; color:black; }
+    .toast.info { background: #17a2b8; }
+
+    @keyframes fadeInOut {
+        0% { opacity: 0; transform: translateY(20px); }
+        10% { opacity: 1; transform: translateY(0); }
+        90% { opacity: 1; }
+        100% { opacity: 0; transform: translateY(20px); }
+    }
+    </style>
+
+
 </head>
 <body>
 

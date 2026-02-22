@@ -2,15 +2,58 @@
 <html>
 <head>
     <title>Dashboard</title>
+    <link rel="icon" href="data:,">
+    <style>
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #333;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 9999;
+        opacity: 0.95;
+        animation: fadeInOut 3s forwards;
+    }
+
+    .toast.success { background: #28a745; }
+    .toast.error { background: #dc3545; }
+    .toast.warning { background: #ffc107; color:black; }
+    .toast.info { background: #17a2b8; }
+
+    @keyframes fadeInOut {
+        0% { opacity: 0; transform: translateY(20px); }
+        10% { opacity: 1; transform: translateY(0); }
+        90% { opacity: 1; }
+        100% { opacity: 0; transform: translateY(20px); }
+    }
+    </style>
 </head>
 <body>
 
 <!-- ================= NETWORK STATUS ================= -->
-<div id="networkStatus"
-     style="padding:8px; font-weight:bold; margin-bottom:10px;">
-</div>
+<div id="networkStatus" style="padding:8px; font-weight:bold; margin-bottom:10px;"></div>
 
 <h2 id="roleTitle"></h2>
+
+<!-- ================= INSPECTOR PROFILE SUMMARY ================= -->
+<div id="profileSection" style="display:none; border:1px solid #444; padding:10px; margin-bottom:20px;">
+
+    <h3 style="cursor:pointer;" onclick="toggleProfile()">My Profile ⯆</h3>
+
+    <div id="profileBody" style="display:none; margin-top:10px;">
+        <p><strong>Username:</strong> <span id="prof_username"></span></p>
+        <p><strong>Department:</strong> <span id="prof_department"></span></p>
+        <p><strong>Designation:</strong> <span id="prof_designation"></span></p>
+        <p><strong>Office Division:</strong> <span id="prof_office_division"></span></p>
+        <p><strong>Contact Number:</strong> <span id="prof_contact"></span></p>
+        <p><strong>Device ID:</strong> <span id="prof_device"></span></p>
+
+        <button onclick="openProfile()">Edit Profile</button>
+    </div>
+</div>
 
 <!-- ================= INSPECTOR SECTION ================= -->
 <div id="inspectorSection" style="display:none;">
@@ -70,7 +113,6 @@
 </div>
 
 <!-- STEP 3 -->
-<!-- STEP 3 -->
 <div id="step3" style="display:none;">
     <h4>Observation Details</h4>
 
@@ -128,16 +170,9 @@
 
     <video id="video" width="300" autoplay style="display:none;"></video><br>
 
-    <button id="captureBtn"
-        onclick="capturePhoto()"
-        style="display:none;">
-        Capture Photo
-    </button>
+    <button id="captureBtn" onclick="capturePhoto()" style="display:none;">Capture Photo</button>
 
-    <canvas id="canvas"
-        width="300"
-        height="200"
-        style="display:none;"></canvas>
+    <canvas id="canvas" width="300" height="200" style="display:none;"></canvas>
 
     <br><br>
 
@@ -172,46 +207,95 @@
 
 </div>
 
-<!-- ================= ADMIN SECTION ================= -->
+<!-- ========= ADMIN SECTION ========= -->
 <div id="adminSection" style="display:none;">
-    <h3>All Inspections</h3>
+    <h2>Admin – All Inspections</h2>
     <button onclick="loadAllInspections()">Refresh</button>
 
-    <h4>Pending</h4>
+    <h3>Pending</h3>
     <div id="pendingList"></div>
+    <div>
+        <button onclick="prevPendingPage()">Previous</button>
+        <span id="pendingPageInfo"></span>
+        <button onclick="nextPendingPage()">Next</button>
+    </div>
 
-    <h4>Approved</h4>
+    <hr>
+
+    <h3>Approved</h3>
     <div id="approvedList"></div>
+    <div>
+        <button onclick="prevApprovedPage()">Previous</button>
+        <span id="approvedPageInfo"></span>
+        <button onclick="nextApprovedPage()">Next</button>
+    </div>
 
-    <h4>Rejected</h4>
+    <hr>
+
+    <h3>Rejected</h3>
     <div id="rejectedList"></div>
+    <div>
+        <button onclick="prevRejectedPage()">Previous</button>
+        <span id="rejectedPageInfo"></span>
+        <button onclick="nextRejectedPage()">Next</button>
+    </div>
 </div>
 
-<!-- ================= SHARED MODAL ================= -->
-<div id="inspectionModal"
-style="
+<!-- ========= PROFILE MODAL ========= -->
+<div id="profileModal" style="
     display:none;
     position:fixed;
-    top:5%;
-    left:15%;
-    width:70%;
-    max-height:85vh;
-    overflow-y:auto;
+    top:10%;
+    left:20%;
+    width:60%;
     background:white;
     border:2px solid black;
     padding:20px;
-    z-index:1000;
-    box-shadow:0 0 10px rgba(0,0,0,0.5);
+    z-index:2000;
 ">
-    <h3>Inspection Details</h3>
-    <div id="modalContent"></div>
+    <h3>Edit Profile</h3>
+    <div id="profileModalContent"></div>
     <br>
-    <button onclick="closeModal()">Close</button>
+    <button onclick="closeProfileModal()">Close</button>
 </div>
 
 <br><br>
 <button onclick="logout()">Logout</button>
-
 <script src="script.js"></script>
+
+<div id="loadingSpinner" 
+     style="display:none;
+            position:fixed;
+            top:50%;
+            left:50%;
+            transform:translate(-50%,-50%);
+            padding:20px;
+            background:#fff;
+            border:2px solid #000;
+            font-weight:bold;
+            z-index:3000;">
+    Processing... Please wait
+</div>
+<!-- ========= INSPECTION MODAL ========= -->
+<div id="inspectionModal" style="
+    display:none;
+    position:fixed;
+    top:5%;
+    left:5%;
+    width:90%;
+    height:90%;
+    background:white;
+    border:2px solid black;
+    padding:20px;
+    z-index:5000;
+    overflow-y:auto;
+    overflow-x:hidden;
+">
+    <div id="modalContent"></div>
+
+    <br>
+    <button onclick="closeModal()">Close</button>
+</div>
+
 </body>
 </html>
