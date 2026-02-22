@@ -1,4 +1,9 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
 class Config:
-    SECRET_KEY = "SUPER_SECRET_KEY_MINIMUM_32_CHARACTERS_LONG_123456"
+    SECRET_KEY = os.getenv("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
