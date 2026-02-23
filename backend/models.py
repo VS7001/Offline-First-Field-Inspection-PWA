@@ -37,7 +37,6 @@ class Inspection(db.Model):
 
     latitude = db.Column(db.String(50))
     longitude = db.Column(db.String(50))
-    location_accuracy = db.Column(db.String(50))
     geo_tag_verified = db.Column(db.Boolean, default=False)
 
     # Inspection Observations

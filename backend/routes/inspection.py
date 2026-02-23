@@ -16,24 +16,25 @@ inspection_bp = Blueprint("inspection", __name__)
 @role_required("inspector")
 def submit_inspection(current_user):
 
-    data = request.get_json()  # MUST BE FIRST
+    data = request.get_json()
 
-    # ================================
-    # 🔒 RECORD LOCK ENFORCEMENT
-    # ================================
+    # -------------------------------
+    # RECORD LOCK CHECK
+    # -------------------------------
     existing = Inspection.query.filter_by(
         inspector_id=current_user.id,
         work_order_number=data.get("work_order_number")
     ).first()
 
-    if existing and existing.record_locked:
-        return jsonify({
-            "message": "This inspection is locked and cannot be edited or resubmitted."
-        }), 403
-
-    # ----------------------------
+    # Skip record lock enforcement if offline submission
+    if not data.get("offline_submission_time"):  
+        if existing and existing.record_locked:
+            return jsonify({
+                "message": "This inspection is locked and cannot be edited or resubmitted."
+            }), 403
+    # -------------------------------
     # REQUIRED FIELDS
-    # ----------------------------
+    # -------------------------------
     required_fields = [
         "inspection_type", "scheme_name", "work_order_number",
         "inspection_purpose", "state", "district", "site_name",
@@ -45,14 +46,26 @@ def submit_inspection(current_user):
         if not data.get(field):
             return jsonify({"message": f"{field} is required"}), 400
 
-    # ----------------------------
-    # AUTO CODE
-    # ----------------------------
+    # -------------------------------
+    # UNIQUE CODE
+    # -------------------------------
     inspection_code = f"INS-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
     def safe(v):
         return v if v else "N/A"
 
+    # -------------------------------
+    # DATE PARSING (🔥 FIXED)
+    # -------------------------------
+    try:
+        start_time = isoparse(data["inspection_start_time"]) if data.get("inspection_start_time") else datetime.utcnow()
+        end_time = isoparse(data["inspection_end_time"]) if data.get("inspection_end_time") else datetime.utcnow()
+    except:
+        return jsonify({"message": "Invalid datetime format"}), 400
+
+    # -------------------------------
+    # CREATE NEW INSPECTION
+    # -------------------------------
     inspection = Inspection(
         inspection_code=inspection_code,
 
@@ -70,8 +83,6 @@ def submit_inspection(current_user):
 
         latitude=str(data.get("latitude")),
         longitude=str(data.get("longitude")),
-        location_accuracy=data.get("location_accuracy", "High"),
-        geo_tag_verified=True,
 
         work_progress_percentage=int(data.get("work_progress_percentage")),
         quality_assessment=data.get("quality_assessment"),
@@ -87,21 +98,26 @@ def submit_inspection(current_user):
         inspector_declaration=True,
         record_locked=True,
 
-        inspection_start_time=(
-            isoparse(data["inspection_start_time"])
-            if data.get("inspection_start_time") else datetime.utcnow()
-        ),
-
-        inspection_end_time=(
-            isoparse(data["inspection_end_time"])
-            if data.get("inspection_end_time") else datetime.utcnow()
-        ),
+        inspection_start_time=start_time,
+        inspection_end_time=end_time,
 
         inspector_id=current_user.id
     )
 
-    db.session.add(inspection)   # 🔥 MISSING EARLIER — FIXED
-    db.session.commit()          # 🔥 MUST COMMIT
+    # -------------------------------
+    # OFFLINE / ONLINE SYNC HANDLING
+    # -------------------------------
+    offline_time = data.get("offline_submission_time")
+    inspection.offline_submission_time = (
+        isoparse(offline_time) if offline_time else None
+    )
+
+    inspection.online_sync_time = (
+        datetime.utcnow() if offline_time else None
+    )
+
+    db.session.add(inspection)
+    db.session.commit()
 
     return jsonify({
         "message": "Inspection submitted successfully",
@@ -110,7 +126,7 @@ def submit_inspection(current_user):
 
 
 # ===============================
-# INSPECTOR VIEWS OWN INSPECTIONS
+# INSPECTOR – VIEW OWN INSPECTIONS
 # ===============================
 @inspection_bp.route("/my-inspections", methods=["GET"])
 @token_required
@@ -147,21 +163,27 @@ def my_inspections(current_user):
 
             "photo": i.photo,
             "status": i.status,
-            "created_at": i.created_at
+            "created_at": i.created_at,
+
+            "inspection_start_time": i.inspection_start_time,
+            "inspection_end_time": i.inspection_end_time,
+            "offline_submission_time": i.offline_submission_time,
+            "online_sync_time": i.online_sync_time
         }
         for i in inspections
     ])
 
 
 # ===============================
-# ADMIN - VIEW ALL INSPECTIONS
+# ADMIN – VIEW ALL INSPECTIONS
 # ===============================
 @inspection_bp.route("/all-inspections", methods=["GET"])
 @token_required
 @role_required("admin")
 def all_inspections(current_user):
 
-    inspections = Inspection.query.order_by(Inspection.created_at.desc()).all()
+    inspections = Inspection.query.order_by(
+        Inspection.created_at.desc()).all()
 
     return jsonify([
         {
@@ -181,7 +203,6 @@ def all_inspections(current_user):
 
             "latitude": i.latitude,
             "longitude": i.longitude,
-            "location_accuracy": i.location_accuracy,
 
             "work_progress_percentage": i.work_progress_percentage,
             "quality_assessment": i.quality_assessment,
@@ -197,6 +218,8 @@ def all_inspections(current_user):
 
             "inspection_start_time": i.inspection_start_time,
             "inspection_end_time": i.inspection_end_time,
+            "offline_submission_time": i.offline_submission_time,
+            "online_sync_time": i.online_sync_time,
 
             "inspector_name": i.inspector.username
         }
@@ -205,7 +228,7 @@ def all_inspections(current_user):
 
 
 # ===============================
-# ADMIN AUDIT
+# ADMIN – APPROVE / REJECT
 # ===============================
 @inspection_bp.route("/audit/<int:id>", methods=["PUT"])
 @token_required
@@ -221,55 +244,48 @@ def audit_inspection(current_user, id):
     if action not in ["Approved", "Rejected"]:
         return jsonify({"message": "Invalid action"}), 400
 
-    # First decision
+    # FIRST TIME
     if inspection.status == "Pending":
-        inspection.status = action
-        inspection.approved_by = current_user.id
-        inspection.approved_at = datetime.utcnow()
-
-        log = AuditLog(
-            inspection_id=id,
-            modified_by=current_user.id,
-            action=action,
-            reason="First level approval"
-        )
-
+        reason_text = "First level approval"
     else:
-        # Reversal change (reason required)
         if not reason:
-            return jsonify({"message": "Reason required for changing decision"}), 400
+            return jsonify({"message": "Reason required"}), 400
+        reason_text = reason
 
-        inspection.status = action
-        inspection.approved_by = current_user.id
-        inspection.approved_at = datetime.utcnow()
+    inspection.status = action
+    inspection.approved_by = current_user.id
+    inspection.approved_at = datetime.utcnow()
 
-        log = AuditLog(
-            inspection_id=id,
-            modified_by=current_user.id,
-            action=action,
-            reason=reason
-        )
+    log = AuditLog(
+        inspection_id=id,
+        modified_by=current_user.id,
+        action=action,
+        reason=reason_text
+    )
 
     db.session.add(log)
     db.session.commit()
 
     return jsonify({"message": f"Inspection {action} successfully"})
 
+
 # ===============================
-# ADMIN – VIEW AUDIT HISTORY
+# ADMIN – AUDIT HISTORY
 # ===============================
 @inspection_bp.route("/inspection/<int:id>/audit-history", methods=["GET"])
 @token_required
 @role_required("admin")
 def audit_history(current_user, id):
 
-    logs = AuditLog.query.filter_by(inspection_id=id).order_by(AuditLog.timestamp.desc()).all()
+    logs = AuditLog.query.filter_by(
+        inspection_id=id
+    ).order_by(AuditLog.timestamp.desc()).all()
 
     return jsonify([
         {
             "action": log.action,
             "reason": log.reason,
-            "modified_by": User.query.get(log.modified_by).username if log.modified_by else "Unknown",
+            "modified_by": User.query.get(log.modified_by).username,
             "timestamp": log.timestamp
         }
         for log in logs

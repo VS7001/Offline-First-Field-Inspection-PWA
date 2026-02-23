@@ -53,7 +53,6 @@ let latitude = null;
 let longitude = null;
 let stream = null;
 let currentStep = 1;
-let location_accuracy = null;
 // ================= PAGINATION VARIABLES =================
 let offlineCurrentPage = 1;
 let syncedCurrentPage = 1;
@@ -242,8 +241,7 @@ function capturePhoto() {
         (position) => {
             latitude = position.coords.latitude;
             longitude = position.coords.longitude;
-            location_accuracy = position.coords.accuracy;
-            showToast("Photo, location & accuracy captured successfully", "success");
+            showToast("Photo & location captured successfully", "success");
         },
         () => showToast("Location access denied", "error")
     );
@@ -290,90 +288,81 @@ function validateStep1() {
 
 // ================= SUBMIT =================
 function submitInspection() {
-    document.querySelector("button[onclick='submitInspection()']").disabled = true;
+
     const submitBtn = document.querySelector('#step4 button[onclick="submitInspection()"]');
     disableButton(submitBtn);
     showSpinner();
 
-    // ✅ HIGH PRIORITY REQUIRED FIELD VALIDATION
     const requiredFields = [
-        "inspection_type",
-        "scheme_name",
-        "work_order_number",
-        "inspection_purpose",
-        "state",
-        "district",
-        "site_name",
-        "work_progress_percentage",
-        "quality_assessment",
-        "compliance_status"
+        "inspection_type","scheme_name","work_order_number","inspection_purpose",
+        "state","district","site_name","work_progress_percentage",
+        "quality_assessment","compliance_status"
     ];
 
     for (let field of requiredFields) {
-        const element = document.getElementById(field);
-
-        if (!element || !element.value) {
+        if (!document.getElementById(field).value) {
             stopSubmitLock();
-            showToast(field.replaceAll("_", " ").toUpperCase() + " is required", "error");
+            showToast(field.replaceAll("_"," ").toUpperCase() + " is required", "error");
             return;
         }
     }
 
-    // ✅ Photo & Location check
     if (!capturedImage || !latitude || !longitude) {
         stopSubmitLock();
         showToast("Please capture photo and location first", "error");
         return;
     }
 
-    // ✅ Declaration check
     if (!document.getElementById("inspector_declaration").checked) {
         stopSubmitLock();
         showToast("You must accept declaration before submitting.", "error");
         return;
     }
+
     inspection_end_time = new Date().toISOString();
+    continueSubmit();
+}
+
+function continueSubmit() {
 
     const inspectionData = {
-    inspection_type: document.getElementById("inspection_type").value,
-    scheme_name: document.getElementById("scheme_name").value,
-    work_order_number: document.getElementById("work_order_number").value,
-    inspection_purpose: document.getElementById("inspection_purpose").value,
-    state: document.getElementById("state").value,
-    district: document.getElementById("district").value,
-    taluka: document.getElementById("taluka").value || null,
-    village: document.getElementById("village").value || null,
-    site_name: document.getElementById("site_name").value,
-    landmark: document.getElementById("landmark").value || null,
-    latitude,
-    longitude,
-    location_accuracy: location_accuracy || "Unknown",
-    work_progress_percentage: document.getElementById("work_progress_percentage").value,
-    quality_assessment: document.getElementById("quality_assessment").value,
-    compliance_status: document.getElementById("compliance_status").value,
-    safety_status: document.getElementById("safety_status").value,
-    material_status: document.getElementById("material_status").value,
-    labour_status: document.getElementById("labour_status").value,
-    issues_observed: document.getElementById("issues_observed").value || null,
-    photo: capturedImage,
-    inspection_start_time,
-    inspection_end_time
+        inspection_type: document.getElementById("inspection_type").value,
+        scheme_name: document.getElementById("scheme_name").value,
+        work_order_number: document.getElementById("work_order_number").value,
+        inspection_purpose: document.getElementById("inspection_purpose").value,
+
+        state: document.getElementById("state").value,
+        district: document.getElementById("district").value,
+        taluka: document.getElementById("taluka").value || null,
+        village: document.getElementById("village").value || null,
+        site_name: document.getElementById("site_name").value,
+        landmark: document.getElementById("landmark").value || null,
+
+        latitude,
+        longitude,
+
+        work_progress_percentage: document.getElementById("work_progress_percentage").value,
+        quality_assessment: document.getElementById("quality_assessment").value,
+        compliance_status: document.getElementById("compliance_status").value,
+        safety_status: document.getElementById("safety_status").value,
+        material_status: document.getElementById("material_status").value,
+        labour_status: document.getElementById("labour_status").value,
+        issues_observed: document.getElementById("issues_observed").value || null,
+
+        photo: capturedImage,
+
+        inspection_start_time,
+        inspection_end_time,
+        offline_submission_time: navigator.onLine ? null : new Date().toISOString(),
+        online_sync_time: navigator.onLine ? new Date().toISOString() : null
     };
 
     if (navigator.onLine) {
-        sendToServer(inspectionData)
-            .finally(() => {
-                document.querySelector("button[onclick='submitInspection()']").disabled = false;
-            });
+        sendToServer(inspectionData).finally(() => stopSubmitLock());
     } else {
-        saveOffline(inspectionData)
-    .finally(() => {
-        stopSubmitLock();
-        document.querySelector("button[onclick='submitInspection()']").disabled = false;
-    });
+        saveOffline(inspectionData).finally(() => stopSubmitLock());
     }
 }
-
 
 // ================= LOAD INSPECTOR =================
 async function loadMyInspections() {
@@ -518,17 +507,6 @@ function renderAdminLists() {
         `Page ${rejectedPage} of ${Math.ceil(rejectedData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
 }
 
-function interpretAccuracy(value) {
-    const meters = parseFloat(value);
-
-    if (isNaN(meters)) return "Unknown";
-
-    if (meters <= 50) return `Excellent (${meters} meters)`;
-    if (meters <= 150) return `Good (${meters} meters)`;
-    if (meters <= 300) return `Moderate (${meters} meters)`;
-    return `Poor (${meters} meters)`;
-}
-
 function loadAuditHistory(id) {
 
     fetch(`${API_URL}/inspection/${id}/audit-history`, {
@@ -604,7 +582,6 @@ function openInspection(id) {
 
         <strong>Latitude:</strong> ${safe(inspection.latitude)}<br>
         <strong>Longitude:</strong> ${safe(inspection.longitude)}<br>
-        <strong>Accuracy:</strong> ${interpretAccuracy(inspection.location_accuracy)}<br><br>
 
         <h4>Map Preview</h4>
         ${
@@ -731,7 +708,10 @@ function sendToServer(data) {
         enableButton(submitBtn);
 
         if (!res.ok) {
-            return res.json().then(err => { throw new Error(err.message); });
+            return res.text().then(text => {
+                console.error("SERVER RAW ERROR:", text);
+                throw new Error(text);
+            });
         }
         return res.json();
     })
@@ -805,7 +785,6 @@ function syncOfflineInspections() {
 
                     latitude: item.latitude,
                     longitude: item.longitude,
-                    location_accuracy: item.location_accuracy,
 
                     work_progress_percentage: item.work_progress_percentage,
                     quality_assessment: item.quality_assessment,
@@ -818,7 +797,8 @@ function syncOfflineInspections() {
                     photo: item.photo,
 
                     inspection_start_time: item.inspection_start_time,
-                    inspection_end_time: item.inspection_end_time
+                    inspection_end_time: item.inspection_end_time,
+                    offline_submission_time: item.offline_submission_time
                 };
                 // Send cleaned data
                 return fetch(`${API_URL}/submit-inspection`, {
