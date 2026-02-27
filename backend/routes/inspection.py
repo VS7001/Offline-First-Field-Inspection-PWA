@@ -104,6 +104,10 @@ def submit_inspection(current_user):
         inspector_id=current_user.id
     )
 
+    parent_id = data.get("parent_inspection_id")
+    if parent_id:
+        inspection.parent_inspection_id = int(parent_id)
+
     # -------------------------------
     # OFFLINE / ONLINE SYNC HANDLING
     # -------------------------------
@@ -118,6 +122,15 @@ def submit_inspection(current_user):
 
     db.session.add(inspection)
     db.session.commit()
+
+
+    if parent_id:
+        parent = Inspection.query.get(int(parent_id))
+        if parent:
+            parent.status = "Re-inspection Completed"
+            parent.reinspection_required = False
+            db.session.commit()
+    
 
     return jsonify({
         "message": "Inspection submitted successfully",
@@ -168,7 +181,9 @@ def my_inspections(current_user):
             "inspection_start_time": i.inspection_start_time,
             "inspection_end_time": i.inspection_end_time,
             "offline_submission_time": i.offline_submission_time,
-            "online_sync_time": i.online_sync_time
+            "online_sync_time": i.online_sync_time,
+            "reinspection_required": i.reinspection_required,
+            "parent_inspection_id": i.parent_inspection_id
         }
         for i in inspections
     ])
@@ -220,8 +235,9 @@ def all_inspections(current_user):
             "inspection_end_time": i.inspection_end_time,
             "offline_submission_time": i.offline_submission_time,
             "online_sync_time": i.online_sync_time,
-
-            "inspector_name": i.inspector.username
+            "inspector_name": i.inspector.username,
+            "reinspection_required": i.reinspection_required,
+            "parent_inspection_id": i.parent_inspection_id,
         }
         for i in inspections
     ])
@@ -289,4 +305,60 @@ def audit_history(current_user, id):
             "timestamp": log.timestamp
         }
         for log in logs
+    ])
+
+# ===============================
+# ADMIN – REQUEST REINSPECTION
+# ===============================
+@inspection_bp.route("/request-reinspection/<int:id>", methods=["PUT"])
+@token_required
+@role_required("admin")
+def request_reinspection(current_user, id):
+    inspection = Inspection.query.get(id)
+
+    if not inspection:
+        return jsonify({"message": "Inspection not found"}), 404
+
+    # ⭐ Mark inspection for reinspection
+    inspection.status = "Re-inspection Requested"
+    inspection.reinspection_required = True
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Re‑inspection requested successfully",
+        "inspection_id": id
+    }), 200
+
+@inspection_bp.route("/search-inspections", methods=["GET"])
+@token_required
+def search_inspections(current_user):
+
+    query = request.args.get("q", "").strip()
+
+    if not query:
+        return jsonify([])
+
+    # Case-insensitive search
+    search = f"%{query}%"
+
+    inspections = Inspection.query.filter(
+        (Inspection.inspection_code.ilike(search)) |
+        (Inspection.scheme_name.ilike(search)) |
+        (Inspection.work_order_number.ilike(search)) |
+        (Inspection.state.ilike(search)) |
+        (Inspection.district.ilike(search))
+    ).all()
+
+    return jsonify([
+        {
+            "id": i.id,
+            "inspection_code": i.inspection_code,
+            "scheme_name": i.scheme_name,
+            "work_order_number": i.work_order_number,
+            "state": i.state,
+            "district": i.district,
+            "status": i.status
+        }
+        for i in inspections
     ])

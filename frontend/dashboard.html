@@ -29,11 +29,55 @@
         90% { opacity: 1; }
         100% { opacity: 0; transform: translateY(20px); }
     }
+
+    .filter-bar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+        padding: 10px;
+        border: 1px solid #aaa;
+        background: #f7f7f7;
+        border-radius: 6px;
+    }
+
+    .filter-bar input,
+    .filter-bar select,
+    .filter-bar button {
+        padding: 8px;
+        border: 1px solid #888;
+        border-radius: 5px;
+        font-size: 13px;
+    }
+
+    .filter-bar button {
+        background: black;
+        color: white;
+        cursor: pointer;
+    }
+
+    .filter-bar button:hover {
+        opacity: 0.8;
+    }
+
+    .status-pending {
+     border: 2px solid #f4c542 !important;       /* Yellow */
+     background: #fff8d6;
+    }
+
+    .status-approved {
+        border: 2px solid #28a745 !important;       /* Green */
+        background: #e6ffe6;
+    }
+
+    .status-rejected {
+        border: 2px solid #dc3545 !important;       /* Red */
+        background: #ffe6e6;
+    }    
     </style>
 </head>
 <body>
-
-<!-- ================= NETWORK STATUS ================= -->
 <div id="networkStatus" style="padding:8px; font-weight:bold; margin-bottom:10px;"></div>
 
 <h2 id="roleTitle"></h2>
@@ -58,135 +102,136 @@
 <!-- ================= INSPECTOR SECTION ================= -->
 <div id="inspectorSection" style="display:none;">
 
-<h3>New Inspection</h3>
-<h4 id="stepIndicator">Step 1 of 4</h4>
-<hr>
+<h3 id="inspectionFormHeader" style="cursor:pointer;" onclick="toggleInspectionForm()">
+    New Inspection ⯆
+</h3>
+<div id="inspectionFormContainer">
+    <h4 id="stepIndicator">Step 1 of 4</h4><hr>
+    <!-- STEP 1 -->
+    <div id="step1">
+        <h4>Inspection Details</h4>
 
-<!-- STEP 1 -->
-<div id="step1">
-    <h4>Inspection Details</h4>
+        <label>Inspection Type *</label><br>
+        <select id="inspection_type">
+            <option value="">Select</option>
+            <option value="Routine">Routine</option>
+            <option value="Surprise">Surprise</option>
+            <option value="Complaint Based">Complaint Based</option>
+        </select><br><br>
 
-    <label>Inspection Type *</label><br>
-    <select id="inspection_type">
-        <option value="">Select</option>
-        <option value="Routine">Routine</option>
-        <option value="Surprise">Surprise</option>
-        <option value="Complaint Based">Complaint Based</option>
-    </select><br><br>
+        <label>Scheme / Project Name *</label><br>
+        <input id="scheme_name"><br><br>
 
-    <label>Scheme / Project Name *</label><br>
-    <input id="scheme_name"><br><br>
+        <label>Work Order Number *</label><br>
+        <input id="work_order_number"><br><br>
 
-    <label>Work Order Number *</label><br>
-    <input id="work_order_number"><br><br>
+        <label>Inspection Purpose *</label><br>
+        <textarea id="inspection_purpose"></textarea><br><br>
 
-    <label>Inspection Purpose *</label><br>
-    <textarea id="inspection_purpose"></textarea><br><br>
+        <button onclick="validateStep1()">Next</button>
+    </div>
 
-    <button onclick="validateStep1()">Next</button>
-</div>
+    <!-- STEP 2 -->
+    <div id="step2" style="display:none;">
+        <h4>Location Details</h4>
 
-<!-- STEP 2 -->
-<div id="step2" style="display:none;">
-    <h4>Location Details</h4>
+        <label>State *</label><br>
+        <input id="state"><br><br>
 
-    <label>State *</label><br>
-    <input id="state"><br><br>
+        <label>District *</label><br>
+        <input id="district"><br><br>
 
-    <label>District *</label><br>
-    <input id="district"><br><br>
+        <label>Taluka</label><br>
+        <input id="taluka"><br><br>
 
-    <label>Taluka</label><br>
-    <input id="taluka"><br><br>
+        <label>Village</label><br>
+        <input id="village"><br><br>
 
-    <label>Village</label><br>
-    <input id="village"><br><br>
+        <label>Site Name *</label><br>
+        <input id="site_name"><br><br>
 
-    <label>Site Name *</label><br>
-    <input id="site_name"><br><br>
+        <label>Nearest Landmark</label><br>
+        <input id="landmark"><br><br>
 
-    <label>Nearest Landmark</label><br>
-    <input id="landmark"><br><br>
+        <button onclick="showStep(1)">Back</button>
+        <button onclick="showStep(3)">Next</button>
+    </div>
 
-    <button onclick="showStep(1)">Back</button>
-    <button onclick="showStep(3)">Next</button>
-</div>
+    <!-- STEP 3 -->
+    <div id="step3" style="display:none;">
+        <h4>Observation Details</h4>
 
-<!-- STEP 3 -->
-<div id="step3" style="display:none;">
-    <h4>Observation Details</h4>
+        <label>Work Progress % *</label><br>
+        <input type="number" id="work_progress_percentage"><br><br>
 
-    <label>Work Progress % *</label><br>
-    <input type="number" id="work_progress_percentage"><br><br>
+        <label>Quality Assessment *</label><br>
+        <select id="quality_assessment">
+            <option value="">Select</option>
+            <option value="Good">Good</option>
+            <option value="Average">Average</option>
+            <option value="Poor">Poor</option>
+        </select><br><br>
 
-    <label>Quality Assessment *</label><br>
-    <select id="quality_assessment">
-        <option value="">Select</option>
-        <option value="Good">Good</option>
-        <option value="Average">Average</option>
-        <option value="Poor">Poor</option>
-    </select><br><br>
+        <label>Compliance Status *</label><br>
+        <select id="compliance_status">
+            <option value="">Select</option>
+            <option value="Compliant">Compliant</option>
+            <option value="Non-Compliant">Non-Compliant</option>
+        </select><br><br>
 
-    <label>Compliance Status *</label><br>
-    <select id="compliance_status">
-        <option value="">Select</option>
-        <option value="Compliant">Compliant</option>
-        <option value="Non-Compliant">Non-Compliant</option>
-    </select><br><br>
+        <label>Safety Status *</label><br>
+        <select id="safety_status">
+            <option value="">Select</option>
+            <option value="Safe">Safe</option>
+            <option value="Unsafe">Unsafe</option>
+        </select><br><br>
 
-    <label>Safety Status *</label><br>
-    <select id="safety_status">
-        <option value="">Select</option>
-        <option value="Safe">Safe</option>
-        <option value="Unsafe">Unsafe</option>
-    </select><br><br>
+        <label>Material Status *</label><br>
+        <select id="material_status">
+            <option value="">Select</option>
+            <option value="Adequate">Adequate</option>
+            <option value="Inadequate">Inadequate</option>
+        </select><br><br>
 
-    <label>Material Status *</label><br>
-    <select id="material_status">
-        <option value="">Select</option>
-        <option value="Adequate">Adequate</option>
-        <option value="Inadequate">Inadequate</option>
-    </select><br><br>
+        <label>Labour Status *</label><br>
+        <select id="labour_status">
+            <option value="">Select</option>
+            <option value="Sufficient">Sufficient</option>
+            <option value="Insufficient">Insufficient</option>
+        </select><br><br>
 
-    <label>Labour Status *</label><br>
-    <select id="labour_status">
-        <option value="">Select</option>
-        <option value="Sufficient">Sufficient</option>
-        <option value="Insufficient">Insufficient</option>
-    </select><br><br>
+        <label>Issues Observed</label><br>
+        <textarea id="issues_observed"></textarea><br><br>
 
-    <label>Issues Observed</label><br>
-    <textarea id="issues_observed"></textarea><br><br>
+        <button onclick="showStep(2)">Back</button>
+        <button onclick="validateStep3()">Next</button>
+    </div>
 
-    <button onclick="showStep(2)">Back</button>
-    <button onclick="validateStep3()">Next</button>
-</div>
+    <!-- STEP 4 -->
+    <div id="step4" style="display:none;">
+        <h4>Evidence & Declaration</h4>
 
-<!-- STEP 4 -->
-<div id="step4" style="display:none;">
-    <h4>Evidence & Declaration</h4>
+        <button onclick="startCamera()">Open Camera</button><br><br>
 
-    <button onclick="startCamera()">Open Camera</button><br><br>
+        <video id="video" width="300" autoplay style="display:none;"></video><br>
 
-    <video id="video" width="300" autoplay style="display:none;"></video><br>
+        <button id="captureBtn" onclick="capturePhoto()" style="display:none;">Capture Photo</button>
 
-    <button id="captureBtn" onclick="capturePhoto()" style="display:none;">Capture Photo</button>
+        <canvas id="canvas" width="300" height="200" style="display:none;"></canvas>
 
-    <canvas id="canvas" width="300" height="200" style="display:none;"></canvas>
-
-    <br><br>
+        <br><br>
     
-    <label>
-        <input type="checkbox" id="inspector_declaration">
-        I certify that the inspection details are correct
-    </label>
+        <label>
+            <input type="checkbox" id="inspector_declaration">
+            I certify that the inspection details are correct
+        </label>
 
-    <br><br>
+        <br><br>
 
-    <button onclick="showStep(3)">Back</button>
-    <button onclick="submitInspection()">Submit Inspection</button>
-</div>
-
+        <button onclick="showStep(3)">Back</button>
+        <button onclick="submitInspection()">Submit Inspection</button>
+    </div>
+</div> <!-- End inspectionFormContainer -->
 <hr>
 <h4>Pending Sync (Offline)</h4>
 <div id="offlineList"></div>
@@ -198,7 +243,43 @@
 
 <hr>
 <h4>My Inspections</h4>
-<div id="myInspectionList"></div>
+
+<div class="filter-bar">
+    <h4>Filters : </h4>
+
+    <input id="inspectorSearch" placeholder="Search..." oninput="filterInspector()" />
+
+    <label>From:</label>
+    <input type="date" id="inspStartDate" onchange="filterInspector()" />
+
+    <label>To:</label>
+    <input type="date" id="inspEndDate" onchange="filterInspector()" />
+
+    <select id="inspStatusFilter" onchange="filterInspector()">
+        <option value="">All Status</option>
+        <option value="Pending">Pending</option>
+        <option value="Re-Inspection Requested">Re‑Inspection Requested</option>
+        <option value="Approved">Approved</option>
+        <option value="Rejected">Rejected</option>
+    </select>
+
+    <button onclick="resetInspectorFilters()">Reset</button>
+</div>
+
+<!-- ⭐ OLD UNUSED BLOCK REMOVED (myInspectionList) -->
+
+<h3>Pending</h3>
+<div id="inspPending"></div>
+
+<h3>Re‑Inspection Requested</h3>
+<div id="inspReinspect"></div>
+
+<h3>Approved</h3>
+<div id="inspApproved"></div>
+
+<h3>Rejected</h3>
+<div id="inspRejected"></div>
+
 <div>
     <button onclick="prevSyncedPage()">Previous</button>
     <span id="syncedPageInfo"></span>
@@ -206,11 +287,46 @@
 </div>
 
 </div>
-
-<!-- ========= ADMIN SECTION ========= -->
 <div id="adminSection" style="display:none;">
+
     <h2>Admin – All Inspections</h2>
     <button onclick="loadAllInspections()">Refresh</button>
+    <br><br>
+
+    <div class="filter-bar">
+        <h3>Filters : </h3>
+
+        <input id="adminSearch" placeholder="Search..." oninput="applyAdminFilters()" />
+
+        <label>From:</label>
+        <input type="date" id="adminStartDate" onchange="applyAdminFilters()">
+
+        <label>To:</label>
+        <input type="date" id="adminEndDate" onchange="applyAdminFilters()" />
+
+        <select id="adminStatusFilter" onchange="applyAdminFilters()">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+        </select>
+
+        <select id="adminTypeFilter" onchange="applyAdminFilters()">
+            <option value="">All Types</option>
+            <option value="Routine">Routine</option>
+            <option value="Surprise">Surprise</option>
+            <option value="Complaint Based">Complaint Based</option>
+        </select>
+
+        <select id="adminQualityFilter" onchange="applyAdminFilters()">
+            <option value="">All Quality</option>
+            <option value="Good">Good</option>
+            <option value="Average">Average</option>
+            <option value="Poor">Poor</option>
+        </select>
+
+        <button onclick="resetAdminFilters()">Reset</button>
+    </div>
 
     <h3>Pending</h3>
     <div id="pendingList"></div>
@@ -218,6 +334,16 @@
         <button onclick="prevPendingPage()">Previous</button>
         <span id="pendingPageInfo"></span>
         <button onclick="nextPendingPage()">Next</button>
+    </div>
+
+    <hr>
+
+    <h3>Re‑Inspection Requested</h3>
+    <div id="reinspectList"></div>
+    <div>
+        <button onclick="prevReinspectPage()">Previous</button>
+        <span id="reinspectPageInfo"></span>
+        <button onclick="nextReinspectPage()">Next</button>
     </div>
 
     <hr>
@@ -239,7 +365,8 @@
         <span id="rejectedPageInfo"></span>
         <button onclick="nextRejectedPage()">Next</button>
     </div>
-</div>
+
+</div> <!-- END of adminSection -->
 
 <!-- ========= PROFILE MODAL ========= -->
 <div id="profileModal" style="
@@ -261,7 +388,6 @@
 
 <br><br>
 <button onclick="logout()">Logout</button>
-<script src="script.js"></script>
 
 <div id="loadingSpinner" 
      style="display:none;
@@ -275,6 +401,120 @@
             font-weight:bold;
             z-index:3000;">
     Processing... Please wait
+</div>
+
+<!-- ================= RE-INSPECTION POPUP FORM ================= -->
+<div id="reinspectionModal" style="
+    display:none;
+    position:fixed;
+    top:5%;
+    left:10%;
+    width:80%;
+    background:white;
+    border:2px solid black;
+    padding:20px;
+    z-index:6000;
+    overflow-y:auto;
+    height:90%;
+">
+    <h2>Re‑Inspection Form</h2>
+
+<label><strong>Parent Inspection ID</strong></label><br>
+<input id="re_parent_id" readonly style="background:#eee;"><br><br>
+
+<h3>Inspection Details</h3>
+<label>Inspection Type *</label><br>
+<select id="re_inspection_type">
+    <option value="Routine">Routine</option>
+    <option value="Surprise">Surprise</option>
+    <option value="Complaint Based">Complaint Based</option>
+</select><br><br>
+
+<label>Scheme / Project Name *</label><br>
+<input id="re_scheme_name"><br><br>
+
+<label>Work Order Number *</label><br>
+<input id="re_work_order_number"><br><br>
+
+<label>Inspection Purpose *</label><br>
+<input id="re_inspection_purpose" value="Re-Inspection" readonly><br><br>
+
+<h3>Location Details</h3>
+
+<label>State *</label><br>
+<input id="re_state"><br><br>
+
+<label>District *</label><br>
+<input id="re_district"><br><br>
+
+<label>Taluka</label><br>
+<input id="re_taluka"><br><br>
+
+<label>Village</label><br>
+<input id="re_village"><br><br>
+
+<label>Site Name *</label><br>
+<input id="re_site_name"><br><br>
+
+<label>Nearest Landmark</label><br>
+<input id="re_landmark"><br><br>
+
+<h3>Observation Details</h3>
+
+<label>Work Progress % *</label><br>
+<input type="number" id="re_work_progress_percentage"><br><br>
+
+<label>Quality Assessment *</label><br>
+<select id="re_quality_assessment">
+    <option value="">Select</option>
+    <option value="Good">Good</option>
+    <option value="Average">Average</option>
+    <option value="Poor">Poor</option>
+</select><br><br>
+
+<label>Compliance Status *</label><br>
+<select id="re_compliance_status">
+    <option value="">Select</option>
+    <option value="Compliant">Compliant</option>
+    <option value="Non-Compliant">Non-Compliant</option>
+</select><br><br>
+
+<label>Safety Status *</label><br>
+<select id="re_safety_status">
+    <option value="">Select</option>
+    <option value="Safe">Safe</option>
+    <option value="Unsafe">Unsafe</option>
+</select><br><br>
+
+<label>Material Status *</label><br>
+<select id="re_material_status">
+    <option value="">Select</option>
+    <option value="Adequate">Adequate</option>
+    <option value="Inadequate">Inadequate</option>
+</select><br><br>
+
+<label>Labour Status *</label><br>
+<select id="re_labour_status">
+    <option value="">Select</option>
+    <option value="Sufficient">Sufficient</option>
+    <option value="Insufficient">Insufficient</option>
+</select><br><br>
+
+<input type="hidden" id="re_latitude">
+<input type="hidden" id="re_longitude">
+
+<label>Issues Observed</label><br>
+<textarea id="re_issues_observed"></textarea><br><br>
+
+<h3>Photo Evidence</h3>
+<button onclick="startReCamera()">Open Camera</button><br><br>
+<video id="re_video" width="300" autoplay style="display:none;"></video>
+<button id="re_captureBtn" onclick="captureRePhoto()" style="display:none;">Captu   re</button>
+<canvas id="re_canvas" width="300" height="200" style="display:none;"></canvas>
+<br><br>
+
+<button onclick="submitReInspection()" style="background:green; color:white;">Submit Re‑Inspection</button>
+<button onclick="closeReinspectionModal()" style="background:red; color:white;">Close</button>
 </div>
 <!-- ========= INSPECTION MODAL ========= -->
 <div id="inspectionModal" style="
@@ -296,6 +536,6 @@
     <br>
     <button onclick="closeModal()">Close</button>
 </div>
-
+<script src="script.js"></script>
 </body>
 </html>

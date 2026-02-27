@@ -19,6 +19,7 @@ class User(db.Model):
 
 class Inspection(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    parent_inspection_id = db.Column(db.Integer, db.ForeignKey('inspection.id'))
 
     # Identification
     inspection_code = db.Column(db.String(50), unique=True)
