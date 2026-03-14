@@ -793,11 +793,7 @@ function openInspection(id) {
         <img src="${safe(inspection.photo, '')}" width="300"
             onerror="this.style.display='none'"/><br><br>
 
-        ${inspection.status === "Pending" ? `
-            <button onclick="updateStatus(${inspection.id}, 'Approved', '${inspection.status}')">Approve</button>
-            <button onclick="updateStatus(${inspection.id}, 'Rejected', '${inspection.status}')">Reject</button>
-            <button onclick="requestReinspection(${inspection.id})">Request Re‑Inspection</button>
-        ` : ""}
+        <div id="adminActionButtons"></div>
 
         ${inspection.status === "Re-inspection Requested" ? `
             <div style="color:red; font-weight:bold; margin-top:10px;">
@@ -822,81 +818,80 @@ function openInspection(id) {
     }
 
     document.getElementById("inspectionModal").style.display = "block";
+    renderAdminActionButtons(inspection);
 }
 
 function closeModal() {
     document.getElementById("inspectionModal").style.display = "none";
 }
 
-// ================= ADMIN STATUS =================
-function updateStatus(id, action, currentStatus) {
+function renderAdminActionButtons(inspection) {
 
-    if (!confirm(`Are you sure you want to mark this as ${action}?`)) {
+    const container = document.getElementById("adminActionButtons");
+    container.innerHTML = "";
+
+    const status = inspection.status;
+    const count = inspection.decision_count || 0;
+
+    // 🔒 LOCK AFTER 2 DECISIONS
+    if (count >= 2) {
+        container.innerHTML = `
+            <p style="color:red;font-weight:bold;">
+            This inspection is locked.
+            </p>
+        `;
         return;
     }
 
-    // ✅ FIRST TIME → NO password, NO reason
-    if (currentStatus === "Pending") {
-        sendAuditRequest(id, action, null);
+    // ⭐ FIRST DECISION
+    if (count === 0) {
+        container.innerHTML = `
+            <button onclick="adminDecision(${inspection.id}, 'Approved')">
+                Approve
+            </button>
+
+            <button onclick="adminDecision(${inspection.id}, 'Rejected')">
+                Reject
+            </button>
+
+            <button onclick="requestReinspection(${inspection.id})">
+                Request Re‑Inspection
+            </button>
+        `;
         return;
     }
 
-    // ✅ SECOND TIME → Ask password + reason
-    const password = prompt("Re-authorization required. Enter admin password:");
-    if (!password) {
-        showToast("Password required", "error");
-        return;
-    }
+    // ⭐ SECOND DECISION
+    if (count === 1) {
 
-    const reason = prompt("Enter reason for changing decision:");
-    if (!reason) {
-        showToast("Reason required", "error");
-        return;
-    }
+        if (status === "Approved") {
 
-    fetch(`${API_URL}/verify-admin`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
-        },
-        body: JSON.stringify({ password: password })
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Verification failed");
-        return res.json();
-    })
-    .then(() => {
-        sendAuditRequest(id, action, reason);
-    })
-    .catch(() => {
-        showToast("Incorrect admin password", "error");
-    });
+            container.innerHTML = `
+                <button onclick="adminDecisionWithReason(${inspection.id}, 'Rejected')">
+                    Change to Reject
+                </button>
+
+                <button onclick="requestReinspection(${inspection.id})">
+                    Request Re‑Inspection
+                </button>
+            `;
+
+        } else if (status === "Rejected") {
+
+            container.innerHTML = `
+                <button onclick="adminDecisionWithReason(${inspection.id}, 'Approved')">
+                    Change to Approve
+                </button>
+
+                <button onclick="requestReinspection(${inspection.id})">
+                    Request Re‑Inspection
+                </button>
+            `;
+
+        }
+
+    }
 }
-
-
-function sendAuditRequest(id, action, reason) {
-
-    fetch(`${API_URL}/audit/${id}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
-        },
-        body: JSON.stringify({ action: action, reason: reason })
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Server error");
-        return res.json();
-    })
-    .then(data => {
-        showToast(data.message, "success");
-        closeModal();
-        loadAllInspections();
-    });
-}
-
-
 
 
 // ================= OFFLINE =================
@@ -1967,4 +1962,55 @@ function renderComparisonBlock(parent, child) {
             </div>
         </div>
     `;
+}
+
+function adminDecision(id, action) {
+    fetch(`${API_URL}/audit/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("token")
+        },
+        body: JSON.stringify({ action, reason: null })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast(data.message, "success");
+        closeModal();
+        loadAllInspections();
+    });
+}
+
+function adminDecisionWithReason(id, action) {
+
+    const password = prompt("Admin Password Required:");
+    if (!password) {
+        alert("Password is required.");
+        return;
+    }
+
+    const reason = prompt("Enter reason for this change:");
+    if (!reason) {
+        alert("Reason is required.");
+        return;
+    }
+
+    fetch(`${API_URL}/audit/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("token")
+        },
+        body: JSON.stringify({
+            action: action,
+            reason: reason,
+            password: password   // 🔥 send password
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast(data.message, "success");
+        closeModal();
+        loadAllInspections();
+    });
 }

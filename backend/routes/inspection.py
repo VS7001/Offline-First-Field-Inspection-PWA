@@ -5,6 +5,7 @@ from models import User, Inspection, AuditLog
 from utils import token_required, role_required
 from datetime import datetime
 from dateutil.parser import isoparse
+from werkzeug.security import check_password_hash
 
 inspection_bp = Blueprint("inspection", __name__)
 
@@ -238,6 +239,7 @@ def all_inspections(current_user):
             "inspector_name": i.inspector.username,
             "reinspection_required": i.reinspection_required,
             "parent_inspection_id": i.parent_inspection_id,
+            "decision_count": i.decision_count
         }
         for i in inspections
     ])
@@ -245,6 +247,9 @@ def all_inspections(current_user):
 
 # ===============================
 # ADMIN – APPROVE / REJECT
+# ===============================
+# ===============================
+# ADMIN – AUDIT HISTORY
 # ===============================
 @inspection_bp.route("/audit/<int:id>", methods=["PUT"])
 @token_required
@@ -256,22 +261,41 @@ def audit_inspection(current_user, id):
 
     action = data.get("action")
     reason = data.get("reason")
+    password = data.get("password")
 
     if action not in ["Approved", "Rejected"]:
         return jsonify({"message": "Invalid action"}), 400
 
-    # FIRST TIME
-    if inspection.status == "Pending":
+    # 🔒 BLOCK AFTER SECOND CHANGE
+    if inspection.decision_count >= 2:
+        return jsonify({"message": "This inspection has reached the maximum number of decisions and is now locked."}), 403
+
+    # ⭐ FIRST DECISION (Pending → Approved/Rejected)
+    if inspection.decision_count == 0:
         reason_text = "First level approval"
+
+    # ⭐ SECOND DECISION (Approved → Reject OR Rejected → Approve)
     else:
+        # must include password
+        if not password:
+            return jsonify({"message": "Password required"}), 400
+
+        admin = User.query.get(current_user.id)
+        if not admin or not check_password_hash(admin.password, password):
+            return jsonify({"message": "Invalid password"}), 403
+
         if not reason:
             return jsonify({"message": "Reason required"}), 400
+
         reason_text = reason
 
+    # --- Apply decision ---
     inspection.status = action
     inspection.approved_by = current_user.id
     inspection.approved_at = datetime.utcnow()
+    inspection.decision_count += 1
 
+    # --- Audit log ---
     log = AuditLog(
         inspection_id=id,
         modified_by=current_user.id,
@@ -282,30 +306,10 @@ def audit_inspection(current_user, id):
     db.session.add(log)
     db.session.commit()
 
-    return jsonify({"message": f"Inspection {action} successfully"})
-
-
-# ===============================
-# ADMIN – AUDIT HISTORY
-# ===============================
-@inspection_bp.route("/inspection/<int:id>/audit-history", methods=["GET"])
-@token_required
-@role_required("admin")
-def audit_history(current_user, id):
-
-    logs = AuditLog.query.filter_by(
-        inspection_id=id
-    ).order_by(AuditLog.timestamp.desc()).all()
-
-    return jsonify([
-        {
-            "action": log.action,
-            "reason": log.reason,
-            "modified_by": User.query.get(log.modified_by).username,
-            "timestamp": log.timestamp
-        }
-        for log in logs
-    ])
+    return jsonify({
+        "message": f"Inspection {action} successfully",
+        "decision_count": inspection.decision_count
+    }), 200
 
 # ===============================
 # ADMIN – REQUEST REINSPECTION

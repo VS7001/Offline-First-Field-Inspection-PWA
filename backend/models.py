@@ -67,6 +67,8 @@ class Inspection(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     approved_at = db.Column(db.DateTime)
 
+    decision_count = db.Column(db.Integer, default=0)
+
     # Timestamps
     inspection_start_time = db.Column(db.DateTime)
     inspection_end_time = db.Column(db.DateTime)
@@ -79,6 +81,7 @@ class Inspection(db.Model):
     # Relationship
     inspector_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     inspector = db.relationship('User', foreign_keys=[inspector_id])
+
 
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
