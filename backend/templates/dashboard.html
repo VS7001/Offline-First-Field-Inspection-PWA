@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
     <title>Dashboard</title>
     <link rel="icon" href="data:,">
     <style>
@@ -17,7 +19,6 @@
         opacity: 0.95;
         animation: fadeInOut 3s forwards;
     }
-
     .toast.success { background: #28a745; }
     .toast.error { background: #dc3545; }
     .toast.warning { background: #ffc107; color:black; }
@@ -536,6 +537,6 @@
     <br>
     <button onclick="closeModal()">Close</button>
 </div>
-<script src="script.js"></script>
+<script src="/static/script.js"></script>
 </body>
 </html>

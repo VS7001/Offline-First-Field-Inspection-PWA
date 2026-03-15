@@ -2,7 +2,7 @@ window.onerror = function(msg, url, line, col, error) {
     console.log("🔥 GLOBAL ERROR →", msg, " at line:", line, "col:", col);
 };
 
-const API_URL = "http://127.0.0.1:5000";
+const API_URL = "";
 // ================= INDEXEDDB SETUP =================
 let db;
 const DB_NAME = "inspection_db";
@@ -122,6 +122,11 @@ function login() {
         // SUCCESS
         localStorage.setItem("token", data.token);
         localStorage.setItem("role", data.role);
+        if (data.role === "admin" && window.matchMedia('(display-mode: standalone)').matches) {
+            alert("Admin dashboard should be accessed from browser, not installed app.");
+            localStorage.clear();
+            return;
+        }
         window.location.href = "dashboard.html";
     })
     .catch(() => {
@@ -2014,3 +2019,31 @@ function adminDecisionWithReason(id, action) {
         loadAllInspections();
     });
 }
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/static/service-worker.js")
+    .then(reg => console.log("Service Worker registered"))
+    .catch(err => console.log("Service Worker error", err));
+}
+
+let deferredPrompt;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+
+    const installBtn = document.createElement("button");
+    installBtn.innerText = "Install App";
+    installBtn.style.position = "fixed";
+    installBtn.style.bottom = "20px";
+    installBtn.style.right = "20px";
+    installBtn.style.padding = "10px";
+
+    installBtn.onclick = () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+            deferredPrompt = null;
+        });
+    };
+
+    document.body.appendChild(installBtn);
+});
