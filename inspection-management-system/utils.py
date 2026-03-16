@@ -4,7 +4,7 @@ import jwt
 
 from config import Config
 from models import User
-
+from extensions import db
 
 def token_required(f):
     @wraps(f)
@@ -23,7 +23,7 @@ def token_required(f):
 
         try:
             data = jwt.decode(token, Config.SECRET_KEY, algorithms=["HS256"])
-            current_user = User.query.get(data["user_id"])
+            current_user = db.session.get(User, data["user_id"])
         except:
             return jsonify({"message": "Invalid or expired token"}), 401
 

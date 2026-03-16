@@ -53,7 +53,6 @@ let stream = null;
 let currentStep = 1;
 // ================= PAGINATION VARIABLES =================
 let offlineCurrentPage = 1;
-let syncedCurrentPage = 1;
 const ITEMS_PER_PAGE = 10;
 let syncedDataCache = []; // stores synced inspections for pagination
 
@@ -61,28 +60,38 @@ let syncedDataCache = []; // stores synced inspections for pagination
 let adminCurrentPage = 1;
 const ADMIN_ITEMS_PER_PAGE = 10;
 let adminDataCache = []; // Stores all admin inspection records
-let pendingPage = 1;
-let approvedPage = 1;
-let rejectedPage = 1;
 let adminFilterActive = false;
 let inspectorFilterActive = false;
-let reinspectPage = 1;
+// INSPECTOR
+let inspectorPendingPage = 1;
+let inspectorApprovedPage = 1;
+let inspectorRejectedPage = 1;
+let inspectorReinspectPage = 1;
+
+// ADMIN
+let adminPendingPage = 1;
+let adminApprovedPage = 1;
+let adminRejectedPage = 1;
+let adminReinspectPage = 1;
+
 
 // ================= NAVIGATION =================
 function goToRegister() {
-    window.location.href = "register.html";
+    window.location.href = "/register";
 }
 
 function goToLogin() {
-    window.location.href = "index.html";
+    window.location.href = "/";
 }
 
 function showSpinner() {
-    document.getElementById("loadingSpinner").style.display = "block";
+    const spinner = document.getElementById("loadingSpinner");
+    if (spinner) spinner.style.display = "block";
 }
 
 function hideSpinner() {
-    document.getElementById("loadingSpinner").style.display = "none";
+    const spinner = document.getElementById("loadingSpinner");
+    if (spinner) spinner.style.display = "none";
 }
 
 function disableButton(btn) {
@@ -103,15 +112,25 @@ function safe(v, fallback = "N/A") {
 
 // ================= LOGIN =================
 function login() {
+
+    const username = document.getElementById("loginUsername").value;
+    const password = document.getElementById("loginPassword").value;
+
+    if (!username || !password) {
+        showToast("Enter username and password", "warning");
+        return;
+    }
+    showSpinner();
     fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            username: document.getElementById("loginUsername").value,
-            password: document.getElementById("loginPassword").value
+            username,
+            password
         })
     })
     .then(async res => {
+         hideSpinner();
         const data = await res.json();
 
         if (!res.ok) {
@@ -119,15 +138,16 @@ function login() {
             return;
         }
 
-        // SUCCESS
         localStorage.setItem("token", data.token);
         localStorage.setItem("role", data.role);
+
         if (data.role === "admin" && window.matchMedia('(display-mode: standalone)').matches) {
             alert("Admin dashboard should be accessed from browser, not installed app.");
             localStorage.clear();
             return;
         }
-        window.location.href = "dashboard.html";
+
+        window.location.href = "/dashboard";
     })
     .catch(() => {
         showToast("Server not reachable!", "error");
@@ -190,8 +210,8 @@ function register() {
 
         // Redirect after 1.5 sec
         setTimeout(() => {
-            window.location.href = "index.html";
-        }, 6000);
+            window.location.href = "/";
+        }, 1500);
     })
     .catch(() => showToast("Server not reachable!", "error"));
 }
@@ -218,7 +238,7 @@ window.onload = function() {
     const role = localStorage.getItem("role");
 
     if (!role) {
-        window.location.href = "index.html";
+        window.location.href = "/";
         return;
     }
 
@@ -262,13 +282,35 @@ async function startCamera() {
 
     if (stream) return;
 
-    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    } catch {
+        showToast("Camera permission denied", "error");
+        return;
+    }
 
     const video = document.getElementById("video");
     video.style.display = "block";
     video.srcObject = stream;
 
     document.getElementById("captureBtn").style.display = "inline-block";
+}
+function stopCamera(){
+    if(stream){
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+    }
+
+    const video = document.getElementById("video");
+    if(video){
+        video.srcObject = null;
+        video.style.display = "none";
+    }
+
+    const captureBtn = document.getElementById("captureBtn");
+    if(captureBtn){
+        captureBtn.style.display = "none";
+    }
 }
 
 function capturePhoto() {
@@ -282,14 +324,7 @@ function capturePhoto() {
 
     capturedImage = canvas.toDataURL("image/png");
 
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-    }
-
-    video.srcObject = null;
-    video.style.display = "none";
-    document.getElementById("captureBtn").style.display = "none";
+    stopCamera();
 
     navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -342,6 +377,9 @@ function validateStep1() {
 
 // ================= SUBMIT =================
 function submitInspection() {
+    if(document.querySelector('#step4 button[onclick="submitInspection()"]').disabled){
+        return;
+    }
 
     const submitBtn = document.querySelector('#step4 button[onclick="submitInspection()"]');
     disableButton(submitBtn);
@@ -380,6 +418,7 @@ function submitInspection() {
 function continueSubmit() {
 
     const inspectionData = {
+        client_id: crypto.randomUUID(),
         inspection_type: document.getElementById("inspection_type").value,
         scheme_name: document.getElementById("scheme_name").value,
         work_order_number: document.getElementById("work_order_number").value,
@@ -428,6 +467,7 @@ function continueSubmit() {
     } else {
         saveOffline(inspectionData).finally(() => stopSubmitLock());
     }
+    
 }
 
 // ================= LOAD INSPECTOR =================
@@ -495,10 +535,7 @@ function loadAllInspections() {
 
         // Store all admin inspections in memory
         adminDataCache = data;
-
-        pendingPage = 1;
-        approvedPage = 1;
-        rejectedPage = 1;
+        updateAdminStats();
 
         // Render first pagination page
         renderAdminLists();
@@ -521,7 +558,7 @@ function renderAdminLists() {
 
     // FILTER DATA
     const pendingData = adminDataCache.filter(i => i.status === "Pending");
-    const reinspectData = adminDataCache.filter(i => i.status === "Re-inspection Requested");
+    const reinspectData = adminDataCache.filter(i => i.status === "Re-Inspection Requested");
     const approvedData = adminDataCache.filter(i => i.status === "Approved");
     const rejectedData = adminDataCache.filter(i => i.status === "Rejected");
 
@@ -533,11 +570,11 @@ function renderAdminLists() {
     }
 
     // RENDER PENDING
-    paginate(pendingData, pendingPage).forEach(i => {
+    paginate(pendingData, adminPendingPage).forEach(i => {
         pendingList.innerHTML += `
             <div class="${getStatusClass(i.status)}"
                 onclick="openInspection(${i.id})"
-                style="margin:10px; padding:10px; cursor:pointer;">
+                style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
     
                 <strong>${i.inspection_code}</strong><br>
                 Type: ${i.inspection_type}<br>
@@ -556,11 +593,11 @@ function renderAdminLists() {
     });
 
     // RENDER REINSPECTION REQUESTED
-    paginate(reinspectData, reinspectPage).forEach(i => {
+    paginate(reinspectData, adminReinspectPage).forEach(i => {
         reinspectList.innerHTML += `
         <div class="${getStatusClass(i.status)}"
             onclick="openInspection(${i.id})"
-            style="margin:10px; padding:10px; cursor:pointer;">
+            style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
 
             <strong>${i.inspection_code}</strong><br>
             Type: ${i.inspection_type}<br>
@@ -575,11 +612,11 @@ function renderAdminLists() {
     });
 
     // RENDER APPROVED
-    paginate(approvedData, approvedPage).forEach(i => {
+    paginate(approvedData, adminApprovedPage).forEach(i => {
         approvedList.innerHTML += `
             <div class="${getStatusClass(i.status)}"
                 onclick="openInspection(${i.id})"
-                style="margin:10px; padding:10px; cursor:pointer;">
+                style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                 <strong>${i.inspection_code}</strong><br>
                 Type: ${i.inspection_type}<br>
                 Status: ${i.status}
@@ -588,11 +625,11 @@ function renderAdminLists() {
     });
 
     // RENDER REJECTED
-    paginate(rejectedData, rejectedPage).forEach(i => {
+    paginate(rejectedData, adminRejectedPage).forEach(i => {
         rejectedList.innerHTML += `
             <div class="${getStatusClass(i.status)}"
                 onclick="openInspection(${i.id})"
-                style="margin:10px; padding:10px; cursor:pointer;">
+                style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                 <strong>${i.inspection_code}</strong><br>
                 Type: ${i.inspection_type}<br>
                 Status: ${i.status}
@@ -602,23 +639,24 @@ function renderAdminLists() {
 
     // UPDATE PAGE INFO
     document.getElementById("pendingPageInfo").innerText =
-        `Page ${pendingPage} of ${Math.ceil(pendingData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
+        `Page ${adminPendingPage} of ${Math.ceil(pendingData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
 
     document.getElementById("reinspectPageInfo").innerText =
-        `Page ${reinspectPage} of ${Math.ceil(reinspectData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
+        `Page ${adminReinspectPage} of ${Math.ceil(reinspectData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
 
     document.getElementById("approvedPageInfo").innerText =
-        `Page ${approvedPage} of ${Math.ceil(approvedData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
+        `Page ${adminApprovedPage} of ${Math.ceil(approvedData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
 
     document.getElementById("rejectedPageInfo").innerText =
-        `Page ${rejectedPage} of ${Math.ceil(rejectedData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
+        `Page ${adminRejectedPage} of ${Math.ceil(rejectedData.length / ADMIN_ITEMS_PER_PAGE) || 1}`;
 }
 
 function applyAdminFilters() {
+    adminPendingPage = 1;
+    adminApprovedPage = 1;
+    adminRejectedPage = 1;
+    adminReinspectPage = 1;
     adminFilterActive = true;
-    pendingPage = 1;
-    approvedPage = 1;
-    rejectedPage = 1;
     let q = document.getElementById("adminSearch").value.trim().toLowerCase();
     let from = document.getElementById("adminStartDate").value;
     let to = document.getElementById("adminEndDate").value;
@@ -653,6 +691,7 @@ function applyAdminFilters() {
 
     // ⭐ THE MAIN FIX — RENDER FILTERED RESULTS
     renderFilteredAdminLists(filtered);
+    updateAdminStatsFiltered(filtered);
 
     // Hide pagination
     document.getElementById("pendingPageInfo").innerText = "";
@@ -676,7 +715,7 @@ function renderFilteredAdminLists(data) {
         const card = `
             <div class="${getStatusClass(i.status)}"
                  onclick="openInspection(${i.id})"
-                 style="margin:10px; padding:10px; cursor:pointer;">
+                 style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                 <strong>${i.inspection_code}</strong><br>
                 Type: ${i.inspection_type}<br>
                 Status: ${i.status}<br>
@@ -691,7 +730,7 @@ function renderFilteredAdminLists(data) {
         if (i.status === "Pending") pendingList.innerHTML += card;
         else if (i.status === "Approved") approvedList.innerHTML += card;
         else if (i.status === "Rejected") rejectedList.innerHTML += card;
-        else if (i.status === "Re-inspection Requested") reinspectList.innerHTML += card;
+        else if (i.status === "Re-Inspection Requested") reinspectList.innerHTML += card;
     });
 
     document.getElementById("pendingPageInfo").innerText = "";
@@ -799,8 +838,13 @@ function openInspection(id) {
             onerror="this.style.display='none'"/><br><br>
 
         <div id="adminActionButtons"></div>
+        <br>
+        <button onclick="loadAuditHistory(${inspection.id})"
+        style="background:#444;color:white;padding:6px;">
+        View Audit History
+        </button>
 
-        ${inspection.status === "Re-inspection Requested" ? `
+        ${inspection.status === "Re-Inspection Requested" ? `
             <div style="color:red; font-weight:bold; margin-top:10px;">
                 Awaiting Re‑Inspection by Inspector
             </div>
@@ -822,12 +866,12 @@ function openInspection(id) {
         }
     }
 
-    document.getElementById("inspectionModal").style.display = "block";
+    document.getElementById("modalOverlay").style.display = "block";
     renderAdminActionButtons(inspection);
 }
 
 function closeModal() {
-    document.getElementById("inspectionModal").style.display = "none";
+    document.getElementById("modalOverlay").style.display = "none";
 }
 
 function renderAdminActionButtons(inspection) {
@@ -937,13 +981,16 @@ function sendToServer(data) {
 }
 
 async function saveOffline(data) {
+    if(!db){
+        showToast("Database not ready", "error");
+        return;
+    }
     data.localId = Date.now();
     data.status = "Pending";
     data.offline_submission_time = new Date().toISOString();
 
     if (!data.inspection_start_time) data.inspection_start_time = inspection_start_time;
     if (!data.inspection_end_time) data.inspection_end_time = inspection_end_time;
-    data.offline_submission_time = new Date().toISOString();
     try {
         await addToIndexedDB("offline_inspections", data);
         showToast("Saved offline. Will sync when online.", "success");
@@ -956,6 +1003,7 @@ async function saveOffline(data) {
 }
 
 function syncOfflineInspections() {
+    if(!db) return;
     if (!navigator.onLine) return;
 
     const tx = db.transaction("offline_inspections", "readonly");
@@ -981,6 +1029,7 @@ function syncOfflineInspections() {
 
                 // 🔥 Create a clean copy without forbidden fields
                 let cleaned = {
+                    client_id: item.client_id,
                     inspection_type: item.inspection_type,
                     scheme_name: item.scheme_name,
                     work_order_number: item.work_order_number,
@@ -991,10 +1040,8 @@ function syncOfflineInspections() {
                     village: item.village,
                     site_name: item.site_name,
                     landmark: item.landmark,
-
                     latitude: item.latitude,
                     longitude: item.longitude,
-
                     work_progress_percentage: item.work_progress_percentage,
                     quality_assessment: item.quality_assessment,
                     compliance_status: item.compliance_status,
@@ -1002,9 +1049,7 @@ function syncOfflineInspections() {
                     material_status: item.material_status,
                     labour_status: item.labour_status,
                     issues_observed: item.issues_observed,
-
                     photo: item.photo,
-
                     inspection_start_time: item.inspection_start_time,
                     inspection_end_time: item.inspection_end_time,
                     offline_submission_time: item.offline_submission_time
@@ -1049,8 +1094,14 @@ function syncOfflineInspections() {
 }
 
 async function loadOfflineInspections() {
+    if(!db) return;
     try {
         const offlineData = await getAllFromIndexedDB("offline_inspections");
+        // Update Offline Count Badge
+        const offlineHeader = document.querySelector("#offlineSection h4");
+        if (offlineHeader) {
+            offlineHeader.innerText = "Pending Sync (Offline) (" + offlineData.length + ")";
+        }
 
         const container = document.getElementById("offlineList");
         container.innerHTML = "";
@@ -1082,14 +1133,17 @@ async function loadOfflineInspections() {
 
 // ================= LOGOUT =================
 function logout() {
+
+    if(!confirm("Are you sure you want to logout?")) return;
+
     localStorage.clear();
-    window.location.href = "index.html";
+    window.location.href = "/";
 }
 
 function resetInspectionForm() {
-
+    stopCamera();
     // Reset form fields
-    document.getElementById("inspection_type").value = "Routine";
+    document.getElementById("inspection_type").value = "";
     document.getElementById("scheme_name").value = "";
     document.getElementById("work_order_number").value = "";
     document.getElementById("inspection_purpose").value = "";
@@ -1102,6 +1156,11 @@ function resetInspectionForm() {
     document.getElementById("work_progress_percentage").value = "";
     document.getElementById("issues_observed").value = "";
     document.getElementById("inspector_declaration").checked = false;
+    document.getElementById("quality_assessment").value="";
+    document.getElementById("compliance_status").value="";
+    document.getElementById("safety_status").value="";
+    document.getElementById("material_status").value="";
+    document.getElementById("labour_status").value="";
 
     // Reset camera variables
     capturedImage = null;
@@ -1155,18 +1214,39 @@ function validateStep3() {
 }
 
 function nextOfflinePage() {
-    offlineCurrentPage++;
-    loadOfflineInspections();
+
+    getAllFromIndexedDB("offline_inspections").then(data => {
+
+        const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+
+        if (offlineCurrentPage < totalPages) {
+            offlineCurrentPage++;
+            loadOfflineInspections();
+        }
+
+    });
+
 }
 
 function prevOfflinePage() {
+
     if (offlineCurrentPage > 1) {
         offlineCurrentPage--;
         loadOfflineInspections();
     }
+
 }
 
 function renderSyncedPage() {
+    document.getElementById("statTotal").innerText = syncedDataCache.length;
+    document.getElementById("statPending").innerText =
+    syncedDataCache.filter(i => i.status === "Pending").length;
+
+    document.getElementById("statApproved").innerText =
+    syncedDataCache.filter(i => i.status === "Approved").length;
+
+    document.getElementById("statRejected").innerText =
+    syncedDataCache.filter(i => i.status === "Rejected").length;
     if (inspectorFilterActive) return;
 
     const pending = document.getElementById("inspPending");
@@ -1180,7 +1260,7 @@ function renderSyncedPage() {
     rejected.innerHTML = "";
 
     const pendingData = syncedDataCache.filter(i => i.status === "Pending");
-    const reinspectData = syncedDataCache.filter(i => i.status === "Re-inspection Requested");
+    const reinspectData = syncedDataCache.filter(i => i.status === "Re-Inspection Requested");
     const approvedData = syncedDataCache.filter(i => i.status === "Approved");
     const rejectedData = syncedDataCache.filter(i => i.status === "Rejected");
 
@@ -1194,7 +1274,7 @@ function renderSyncedPage() {
             container.innerHTML += `
                 <div class="${getStatusClass(i.status)}"
                     onclick="openInspectorInspection(${i.id})"
-                    style="margin:10px; padding:10px; cursor:pointer;">
+                    style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                     <strong>${i.inspection_code}</strong><br>
                     Type: ${i.inspection_type}<br>
                     Scheme: ${i.scheme_name}<br>
@@ -1208,28 +1288,27 @@ function renderSyncedPage() {
         });
     }
 
-    renderBlock(pending, pendingData, pendingPage);
-    renderBlock(reinspect, reinspectData, reinspectPage);
-    renderBlock(approved, approvedData, approvedPage);
-    renderBlock(rejected, rejectedData, rejectedPage);
+    renderBlock(pending, pendingData, inspectorPendingPage);
+    renderBlock(reinspect, reinspectData, inspectorReinspectPage);
+    renderBlock(approved, approvedData, inspectorApprovedPage);
+    renderBlock(rejected, rejectedData, inspectorRejectedPage);
 
-    const longest = Math.max(
-        pendingData.length,
-        reinspectData.length,
-        approvedData.length,
-        rejectedData.length
-    );
-
-    const totalPages = Math.ceil(longest / ITEMS_PER_PAGE) || 1;
-
-    document.getElementById("syncedPageInfo").innerText =
-        `Page ${syncedCurrentPage} of ${totalPages}`;
+    document.getElementById("pendingPageInfo").innerText =
+    `Page ${inspectorPendingPage} of ${Math.ceil(pendingData.length / ITEMS_PER_PAGE) || 1}`;
+    document.getElementById("reinspectPageInfo").innerText =
+    `Page ${inspectorReinspectPage} of ${Math.ceil(reinspectData.length / ITEMS_PER_PAGE) || 1}`;
+    document.getElementById("approvedPageInfo").innerText =
+    `Page ${inspectorApprovedPage} of ${Math.ceil(approvedData.length / ITEMS_PER_PAGE) || 1}`;
+    document.getElementById("rejectedPageInfo").innerText =
+    `Page ${inspectorRejectedPage} of ${Math.ceil(rejectedData.length / ITEMS_PER_PAGE) || 1}`;
 }
 
 function filterInspector() {
+    inspectorPendingPage = 1;
+    inspectorApprovedPage = 1;
+    inspectorRejectedPage = 1;
+    inspectorReinspectPage = 1;
     inspectorFilterActive = true;
-    syncedCurrentPage = 1;
-
     let q = document.getElementById("inspectorSearch").value.trim().toLowerCase();
     let from = document.getElementById("inspStartDate").value;
     let to = document.getElementById("inspEndDate").value;
@@ -1271,7 +1350,7 @@ function renderFilteredInspectorListsByStatus(data) {
         const card = `
             <div class="${getStatusClass(i.status)}"
                 onclick="openInspectorInspection(${i.id})"
-                style="margin:10px; padding:10px; cursor:pointer;">
+                style="margin:10px;padding:12px;cursor:pointer;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                 
                 <strong>${i.inspection_code}</strong><br>
                 Type: ${i.inspection_type}<br>
@@ -1288,7 +1367,7 @@ function renderFilteredInspectorListsByStatus(data) {
 
         if (i.status === "Pending") 
             document.getElementById("inspPending").innerHTML += card;
-        if (i.status === "Re-inspection Requested") 
+        if (i.status === "Re-Inspection Requested") 
             document.getElementById("inspReinspect").innerHTML += card;
         if (i.status === "Approved") 
             document.getElementById("inspApproved").innerHTML += card;
@@ -1297,7 +1376,10 @@ function renderFilteredInspectorListsByStatus(data) {
     });
 
     // Remove pagination info during filtering
-    document.getElementById("syncedPageInfo").innerText = "";
+    document.getElementById("pendingPageInfo").innerText = "";
+    document.getElementById("approvedPageInfo").innerText = "";
+    document.getElementById("rejectedPageInfo").innerText = "";
+    document.getElementById("reinspectPageInfo").innerText = "";
 }
 
 function clearInspectorFilters() {
@@ -1306,18 +1388,6 @@ function clearInspectorFilters() {
     document.getElementById("inspStatusFilter").value = "";
 
     renderSyncedPage();
-}
-
-function nextSyncedPage() {
-    syncedCurrentPage++;
-    renderSyncedPage();
-}
-
-function prevSyncedPage() {
-    if (syncedCurrentPage > 1) {
-        syncedCurrentPage--;
-        renderSyncedPage();
-    }
 }
 
 function openInspectorInspection(id) {
@@ -1356,6 +1426,10 @@ function openInspectorInspection(id) {
         <img src="${inspection.photo}" width="300"/><br><br>
 
         <strong>Status:</strong> ${inspection.status}<br>
+
+        ${inspection.admin_reason 
+            ? `<strong style="color:red;">Admin Remark:</strong> ${inspection.admin_reason}<br>`
+            : ""}
         ${inspection.parent_inspection_id
             ? `<strong style="color:blue;">This is a Re‑Inspection (Parent ID: ${inspection.parent_inspection_id})</strong><br>`
             : `<strong style="color:green;">This is an Original Inspection</strong><br>`}
@@ -1386,7 +1460,7 @@ function openInspectorInspection(id) {
             `;
         }
     }
-    if (inspection.status === "Re-inspection Requested") {
+    if (inspection.status === "Re-Inspection Requested") {
     content.innerHTML += `
         <br>
         <button onclick="startReinspection(${inspection.id})"
@@ -1395,7 +1469,7 @@ function openInspectorInspection(id) {
         </button><br><br>
     `;
     }
-    document.getElementById("inspectionModal").style.display = "block";
+    document.getElementById("modalOverlay").style.display = "block";
 
     const child = syncedDataCache.find(c => c.parent_inspection_id === id);
 if (child) {
@@ -1425,20 +1499,18 @@ function startReinspection(id) {
 window.addEventListener("online", updateNetworkStatus);
 window.addEventListener("offline", updateNetworkStatus);
 function handleAdminOffline() {
-    if (localStorage.getItem("role") !== "admin") return;
 
     const statusDiv = document.getElementById("networkStatus");
+
     if (!statusDiv) return;
 
     if (!navigator.onLine) {
+        statusDiv.innerHTML = "🔴 Admin requires internet connection";
+        statusDiv.style.color = "red";
         statusDiv.style.display = "block";
-    // NO RETURN HERE
     } else {
         statusDiv.style.display = "none";
     }
-
-    // Online → show admin UI normally
-    statusDiv.style.display = "none";
 }
 function updateNetworkStatus() {
     const statusDiv = document.getElementById("networkStatus");
@@ -1491,30 +1563,132 @@ function getAllFromIndexedDB(storeName) {
 }
 
 function nextPendingPage() {
-    pendingPage++;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        const data = adminDataCache.filter(i => i.status === "Pending");
+        const totalPages = Math.ceil(data.length / ADMIN_ITEMS_PER_PAGE) || 1;
+
+        if (adminPendingPage < totalPages) {
+            adminPendingPage++;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        const data = syncedDataCache.filter(i => i.status === "Pending");
+        const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+
+        if (inspectorPendingPage < totalPages) {
+            inspectorPendingPage++;
+            renderSyncedPage();
+        }
+    }
 }
 function prevPendingPage() {
-    if (pendingPage > 1) pendingPage--;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        if (adminPendingPage > 1) {
+            adminPendingPage--;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        if (inspectorPendingPage > 1) {
+            inspectorPendingPage--;
+            renderSyncedPage();
+        }
+    }
 }
 
 function nextApprovedPage() {
-    approvedPage++;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        const data = adminDataCache.filter(i => i.status === "Approved");
+        const totalPages = Math.ceil(data.length / ADMIN_ITEMS_PER_PAGE) || 1;
+
+        if (adminApprovedPage < totalPages) {
+            adminApprovedPage++;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        const data = syncedDataCache.filter(i => i.status === "Approved");
+        const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+
+        if (inspectorApprovedPage < totalPages) {
+            inspectorApprovedPage++;
+            renderSyncedPage();
+        }
+    }
 }
 function prevApprovedPage() {
-    if (approvedPage > 1) approvedPage--;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        if (adminApprovedPage > 1) {
+            adminApprovedPage--;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        if (inspectorApprovedPage > 1) {
+            inspectorApprovedPage--;
+            renderSyncedPage();
+        }
+    }
 }
 
 function nextRejectedPage() {
-    rejectedPage++;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        const data = adminDataCache.filter(i => i.status === "Rejected");
+        const totalPages = Math.ceil(data.length / ADMIN_ITEMS_PER_PAGE) || 1;
+
+        if (adminRejectedPage < totalPages) {
+            adminRejectedPage++;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        const data = syncedDataCache.filter(i => i.status === "Rejected");
+        const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+
+        if (inspectorRejectedPage < totalPages) {
+            inspectorRejectedPage++;
+            renderSyncedPage();
+        }
+    }
 }
 function prevRejectedPage() {
-    if (rejectedPage > 1) rejectedPage--;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        if (adminRejectedPage > 1) {
+            adminRejectedPage--;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        if (inspectorRejectedPage > 1) {
+            inspectorRejectedPage--;
+            renderSyncedPage();
+        }
+    }
 }
 
 
@@ -1670,9 +1844,7 @@ function resetInspectorFilters() {
     document.getElementById("inspectorSearch").value = "";
     document.getElementById("inspStartDate").value = "";
     document.getElementById("inspEndDate").value = "";
-    document.getElementById("inspStatusFilter").value = "";
-
-    syncedCurrentPage = 1;
+    document.getElementById("inspStatusFilter").value = ""
 
     loadMyInspections(); // <-- REAL FIX
 }
@@ -1686,11 +1858,6 @@ function resetAdminFilters() {
     document.getElementById("adminStatusFilter").value = "";
     document.getElementById("adminTypeFilter").value = "";
     document.getElementById("adminQualityFilter").value = "";
-
-    pendingPage = 1;
-    approvedPage = 1;
-    rejectedPage = 1;
-
     loadAllInspections();  // <-- REAL FIX
 }
 
@@ -1717,12 +1884,46 @@ function requestReinspection(id) {
 }
 
 function nextReinspectPage() {
-    reinspectPage++;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        const data = adminDataCache.filter(i => i.status === "Re-Inspection Requested");
+        const totalPages = Math.ceil(data.length / ADMIN_ITEMS_PER_PAGE) || 1;
+
+        if (adminReinspectPage < totalPages) {
+            adminReinspectPage++;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        const data = syncedDataCache.filter(i => i.status === "Re-Inspection Requested");
+        const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+
+        if (inspectorReinspectPage < totalPages) {
+            inspectorReinspectPage++;
+            renderSyncedPage();
+        }
+    }
 }
 function prevReinspectPage() {
-    if (reinspectPage > 1) reinspectPage--;
-    renderAdminLists();
+
+    const role = localStorage.getItem("role");
+
+    if(role === "admin"){
+        if (adminReinspectPage > 1) {
+            adminReinspectPage--;
+            renderAdminLists();
+        }
+    }
+
+    if(role === "inspector"){
+        if (inspectorReinspectPage > 1) {
+            inspectorReinspectPage--;
+            renderSyncedPage();
+        }
+    }
 }
 
 function renderParentBlock(parent) {
@@ -1752,15 +1953,21 @@ function renderParentBlock(parent) {
 let re_stream = null;
 let re_capturedImage = null;
 
-async function startReCamera() {
-    if (re_stream) return;
+async function startReCamera(){
+    try{
+        if (re_stream) return;
 
-    re_stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    const video = document.getElementById("re_video");
+        re_stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
-    video.style.display = "block";
-    video.srcObject = re_stream;
-    document.getElementById("re_captureBtn").style.display = "inline-block";
+        const video = document.getElementById("re_video");
+        video.style.display = "block";
+        video.srcObject = re_stream;
+
+        document.getElementById("re_captureBtn").style.display = "inline-block";
+
+    }catch{
+        showToast("Camera permission denied", "error");
+    }
 }
 
 function captureRePhoto() {
@@ -1792,10 +1999,37 @@ function captureRePhoto() {
 }
 
 function submitReInspection() {
+    // REQUIRED FIELD VALIDATION
+    const requiredFields = [
+        "re_scheme_name",
+        "re_work_order_number",
+        "re_state",
+        "re_district",
+        "re_site_name",
+        "re_work_progress_percentage",
+        "re_quality_assessment",
+        "re_compliance_status",
+        "re_safety_status",
+        "re_material_status",
+        "re_labour_status"
+    ];
+
+    for (let field of requiredFields) {
+        const el = document.getElementById(field);
+        if (!el || !el.value) {
+            showToast(field.replace("re_","").replaceAll("_"," ").toUpperCase() + " is required", "error");
+            return;
+        }
+    }
 
     const parent_id = localStorage.getItem("parent_inspection_id");
+    if(!parent_id){
+        showToast("Parent inspection not found","error");
+        return;
+    }
 
     const data = {
+        client_id: crypto.randomUUID(),
         parent_inspection_id: parent_id,
 
         inspection_type: document.getElementById("re_inspection_type").value,
@@ -1828,7 +2062,15 @@ function submitReInspection() {
         inspection_start_time: new Date().toISOString(),
         inspection_end_time: new Date().toISOString()
     };
+    if(!re_capturedImage){
+        showToast("Capture photo first","error")
+        return
+    }
 
+    if(!document.getElementById("re_latitude").value){
+        showToast("Location required","error")
+        return
+    }
     fetch(`${API_URL}/submit-inspection`, {
         method: "POST",
         headers: {
@@ -1845,15 +2087,12 @@ function submitReInspection() {
         closeReinspectionModal();
 
         loadMyInspections();
-        if (localStorage.getItem("role") === "admin") {
-            loadAllInspections(); // admin refresh
-        }
-        loadAllInspections();
     });
 }
 
 
 function closeReinspectionModal() {
+    stopReCamera();
     document.getElementById("reinspectionModal").style.display = "none";
 }
 
@@ -2028,6 +2267,11 @@ if ("serviceWorker" in navigator) {
 let deferredPrompt;
 
 window.addEventListener("beforeinstallprompt", (e) => {
+
+    // Only allow install button on dashboard page
+    if (!window.location.pathname.toLowerCase().includes("dashboard")) return;
+    const role = localStorage.getItem("role");
+    if (role !== "inspector") return;
     e.preventDefault();
     deferredPrompt = e;
 
@@ -2037,13 +2281,54 @@ window.addEventListener("beforeinstallprompt", (e) => {
     installBtn.style.bottom = "20px";
     installBtn.style.right = "20px";
     installBtn.style.padding = "10px";
+    installBtn.style.background = "#138808";
+    installBtn.style.color = "white";
+    installBtn.style.borderRadius = "8px";
+    installBtn.style.border = "none";
+    installBtn.style.cursor = "pointer";
 
     installBtn.onclick = () => {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then(() => {
             deferredPrompt = null;
+            installBtn.remove();
         });
     };
 
-    document.body.appendChild(installBtn);
+    if (!document.getElementById("installBtn")) {
+        installBtn.id = "installBtn";
+        document.body.appendChild(installBtn);
+    }
+
 });
+function updateAdminStats() {
+
+    document.getElementById("statTotal").innerText = adminDataCache.length;
+
+    document.getElementById("statPending").innerText =
+        adminDataCache.filter(i => i.status === "Pending").length;
+
+    document.getElementById("statApproved").innerText =
+        adminDataCache.filter(i => i.status === "Approved").length;
+
+    document.getElementById("statRejected").innerText =
+        adminDataCache.filter(i => i.status === "Rejected").length;
+}
+function updateAdminStatsFiltered(data) {
+    document.getElementById("statTotal").innerText = data.length;
+
+    document.getElementById("statPending").innerText =
+        data.filter(i => i.status === "Pending").length;
+
+    document.getElementById("statApproved").innerText =
+        data.filter(i => i.status === "Approved").length;
+
+    document.getElementById("statRejected").innerText =
+        data.filter(i => i.status === "Rejected").length;
+}
+function stopReCamera(){
+    if(re_stream){
+        re_stream.getTracks().forEach(t=>t.stop());
+        re_stream = null;
+    }
+}

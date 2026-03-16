@@ -1,12 +1,11 @@
-const CACHE_NAME = "inspection-pwa-v1";
+const CACHE_NAME = "inspection-pwa-v2";
 
 const urlsToCache = [
-  "/frontend/index.html",
-  "/frontend/dashboard.html",
-  "/frontend/script.js",
-  "/frontend/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png"
+  "/",
+  "/static/script.js",
+  "/static/manifest.json",
+  "/static/icons/icon-192.png",
+  "/static/icons/icon-512.png"
 ];
 
 self.addEventListener("install", event => {

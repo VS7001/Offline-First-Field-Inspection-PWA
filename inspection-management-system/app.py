@@ -30,6 +30,10 @@ def create_app():
     @app.route("/dashboard")
     def dashboard():
         return render_template("dashboard.html")
+    
+    @app.route("/register")
+    def register():
+        return render_template("register.html")
 
     with app.app_context():
         db.create_all()

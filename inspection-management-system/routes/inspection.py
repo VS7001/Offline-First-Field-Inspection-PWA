@@ -18,6 +18,14 @@ inspection_bp = Blueprint("inspection", __name__)
 def submit_inspection(current_user):
 
     data = request.get_json()
+    client_id = data.get("client_id")
+
+    if client_id:
+        existing = Inspection.query.filter_by(client_id=client_id).first()
+        if existing:
+            return jsonify({
+                "message": "Inspection already synced"
+            }), 200
 
     # -------------------------------
     # RECORD LOCK CHECK
@@ -68,6 +76,7 @@ def submit_inspection(current_user):
     # CREATE NEW INSPECTION
     # -------------------------------
     inspection = Inspection(
+        client_id=client_id,
         inspection_code=inspection_code,
 
         inspection_type=data.get("inspection_type"),
@@ -126,7 +135,7 @@ def submit_inspection(current_user):
 
 
     if parent_id:
-        parent = Inspection.query.get(int(parent_id))
+        parent = db.session.get(Inspection, int(parent_id))
         if parent:
             parent.status = "Re-inspection Completed"
             parent.reinspection_required = False
@@ -184,7 +193,14 @@ def my_inspections(current_user):
             "offline_submission_time": i.offline_submission_time,
             "online_sync_time": i.online_sync_time,
             "reinspection_required": i.reinspection_required,
-            "parent_inspection_id": i.parent_inspection_id
+            "parent_inspection_id": i.parent_inspection_id,
+            "admin_reason": (
+                AuditLog.query.filter_by(inspection_id=i.id)
+                .order_by(AuditLog.timestamp.desc())
+                .first().reason
+                if AuditLog.query.filter_by(inspection_id=i.id).first()
+                else None
+            ),
         }
         for i in inspections
     ])
@@ -245,19 +261,13 @@ def all_inspections(current_user):
     ])
 
 
-# ===============================
-# ADMIN – APPROVE / REJECT
-# ===============================
-# ===============================
-# ADMIN – AUDIT HISTORY
-# ===============================
 @inspection_bp.route("/audit/<int:id>", methods=["PUT"])
 @token_required
 @role_required("admin")
 def audit_inspection(current_user, id):
 
     inspection = Inspection.query.get_or_404(id)
-    data = request.get_json()
+    data = request.get_json() or {}
 
     action = data.get("action")
     reason = data.get("reason")
@@ -324,18 +334,19 @@ def request_reinspection(current_user, id):
         return jsonify({"message": "Inspection not found"}), 404
 
     # ⭐ Mark inspection for reinspection
-    inspection.status = "Re-inspection Requested"
+    inspection.status = "Re-Inspection Requested"
     inspection.reinspection_required = True
 
     db.session.commit()
 
     return jsonify({
-        "message": "Re‑inspection requested successfully",
+        "message": "Re‑Inspection requested successfully",
         "inspection_id": id
     }), 200
 
 @inspection_bp.route("/search-inspections", methods=["GET"])
 @token_required
+@role_required("admin")
 def search_inspections(current_user):
 
     query = request.args.get("q", "").strip()
@@ -365,4 +376,24 @@ def search_inspections(current_user):
             "status": i.status
         }
         for i in inspections
+    ])
+
+
+@inspection_bp.route("/inspection/<int:id>/audit-history", methods=["GET"])
+@token_required
+@role_required("admin")
+def audit_history(current_user, id):
+
+    logs = AuditLog.query.filter_by(
+        inspection_id=id
+    ).order_by(AuditLog.timestamp.desc()).all()
+
+    return jsonify([
+        {
+            "action": log.action,
+            "reason": log.reason,
+            "modified_by": User.query.get(log.modified_by).username,
+            "timestamp": log.timestamp
+        }
+        for log in logs
     ])

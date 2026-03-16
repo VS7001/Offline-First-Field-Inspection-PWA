@@ -1,19 +1,19 @@
 {
   "name": "Field Inspection System",
   "short_name": "Inspection",
-  "start_url": "/frontend/dashboard.html",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2c3e50",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/static/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/static/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
