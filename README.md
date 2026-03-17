@@ -123,7 +123,7 @@ The goal of this project is to build a **reliable field inspection platform** th
 # 📸 Screenshots
 
 ## 🔐 Login Page
-![Login](Screenshots/login.png)
+![Login](Screenshots/login.PNG)
 
 ## 👨‍🔧 Inspector Dashboard
 ![Inspector](Screenshots/inspector-dashboard.png)
