@@ -1,3 +1,4 @@
+const APP_VERSION = "1.0.0";
 window.onerror = function(msg, url, line, col, error) {
     console.log("🔥 GLOBAL ERROR →", msg, " at line:", line, "col:", col);
 };
@@ -233,6 +234,21 @@ if (localStorage.getItem("role") === "inspector") {
 
 // ================= DASHBOARD INIT =================
 window.onload = function() {
+    const storedVersion = localStorage.getItem("app_version");
+
+    if (storedVersion !== APP_VERSION) {
+        console.log("🚀 New version detected");
+
+        localStorage.setItem("app_version", APP_VERSION);
+
+        if ("caches" in window) {
+            caches.keys().then(names => {
+                names.forEach(name => caches.delete(name));
+            });
+        }
+
+        window.location.reload(true);
+    }
     if (!window.location.pathname.toLowerCase().includes("dashboard")) return;
 
     const role = localStorage.getItem("role");
@@ -479,12 +495,12 @@ async function loadMyInspections() {
 
         // ONLINE → Fetch from server
         fetch(`${API_URL}/my-inspections`, {
-            headers: { "Authorization": "Bearer " + token }
+            headers: { ...getAuthHeaders()},
         })
         .then(res => res.json())
         .then(async data => {
 
-            syncedDataCache = data; // update UI cache
+            syncedDataCache = data || [];
 
             // Store to IndexedDB
             const tx = db.transaction("synced_cache", "readwrite");
@@ -527,18 +543,30 @@ function loadAllInspections() {
 
     fetch(`${API_URL}/all-inspections`, {
         headers: {
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         }
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) {
+            return res.text().then(text => {
+                console.error("Admin API error:", text);
+                throw new Error(text);
+            });
+        }
+        return res.json();
+    })
     .then(data => {
+        if (!Array.isArray(data)) {
+            console.error("Invalid admin data:", data);
+            return;
+        }
 
-        // Store all admin inspections in memory
-        adminDataCache = data;
+        adminDataCache = data || [];
         updateAdminStats();
-
-        // Render first pagination page
         renderAdminLists();
+    })
+    .catch(err => {
+        console.error("Load admin error:", err);
     });
 }
 
@@ -743,7 +771,7 @@ function loadAuditHistory(id) {
 
     fetch(`${API_URL}/inspection/${id}/audit-history`, {
         headers: {
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         }
     })
     .then(res => res.json())
@@ -949,7 +977,7 @@ function sendToServer(data) {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         },
         body: JSON.stringify(data)
     })
@@ -1059,7 +1087,7 @@ function syncOfflineInspections() {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": "Bearer " + localStorage.getItem("token")
+                        ...getAuthHeaders()
                     },
                     body: JSON.stringify(cleaned)
                 })
@@ -1238,6 +1266,7 @@ function prevOfflinePage() {
 }
 
 function renderSyncedPage() {
+    if (!Array.isArray(syncedDataCache)) return;
     document.getElementById("statTotal").innerText = syncedDataCache.length;
     document.getElementById("statPending").innerText =
     syncedDataCache.filter(i => i.status === "Pending").length;
@@ -1696,7 +1725,7 @@ function loadInspectorProfile() {
     const token = localStorage.getItem("token");
 
     fetch(`${API_URL}/my-profile`, {
-        headers: { "Authorization": "Bearer " + token }
+        headers: {...getAuthHeaders()}
     })
     .then(res => res.json())
     .then(data => {
@@ -1722,7 +1751,7 @@ function openProfile() {
     const token = localStorage.getItem("token");
 
     fetch(`${API_URL}/my-profile`, {
-        headers: { "Authorization": "Bearer " + token }
+        headers: {...getAuthHeaders() }
     })
     .then(res => res.json())
     .then(data => {
@@ -1782,7 +1811,7 @@ function saveProfile() {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + token
+            ...getAuthHeaders()
         },
         body: JSON.stringify(updated)
     })
@@ -1869,7 +1898,7 @@ function requestReinspection(id) {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         }
     })
     .then(res => res.json())
@@ -2075,7 +2104,7 @@ function submitReInspection() {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         },
         body: JSON.stringify(data)
     })
@@ -2213,7 +2242,7 @@ function adminDecision(id, action) {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         },
         body: JSON.stringify({ action, reason: null })
     })
@@ -2243,7 +2272,7 @@ function adminDecisionWithReason(id, action) {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + localStorage.getItem("token")
+            ...getAuthHeaders()
         },
         body: JSON.stringify({
             action: action,
@@ -2259,8 +2288,11 @@ function adminDecisionWithReason(id, action) {
     });
 }
 if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/service-worker.js")
-    .then(reg => console.log("Service Worker registered"))
+    navigator.serviceWorker.register('/static/service-worker.js')
+    .then(reg => {
+        console.log("Service Worker registered");
+        reg.update(); // 🔥 force update
+    })
     .catch(err => console.log("Service Worker error", err));
 }
 
@@ -2315,6 +2347,10 @@ function updateAdminStats() {
         adminDataCache.filter(i => i.status === "Rejected").length;
 }
 function updateAdminStatsFiltered(data) {
+    if (!data || !Array.isArray(data)) {
+        console.error("Invalid data:", data);
+        return;
+    }
     document.getElementById("statTotal").innerText = data.length;
 
     document.getElementById("statPending").innerText =
@@ -2332,3 +2368,39 @@ function stopReCamera(){
         re_stream = null;
     }
 }
+setInterval(() => {
+    const role = localStorage.getItem("role");
+
+    if (!navigator.onLine) {
+        console.log("Skipping refresh (offline)");
+        return;
+    }
+
+    if (role === "admin") {
+        console.log("🔄 Smart refresh admin...");
+        loadAllInspections();
+    }
+
+    if (role === "inspector") {
+        console.log("🔄 Smart refresh inspector...");
+        loadMyInspections();
+    }
+
+}, 15000);
+
+function getAuthHeaders() {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        alert("Session expired. Please login again.");
+        window.location.href = "/";
+        throw new Error("No token");
+    }
+
+    return {
+        "Authorization": "Bearer " + token
+
+    };
+}
+
+
