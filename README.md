@@ -123,31 +123,31 @@ The goal of this project is to build a **reliable field inspection platform** th
 # 📸 Screenshots
 
 ## 🔐 Login Page
-![Login](screenshots/login.png)
+![Login](Screenshots/login.png)
 
 ## 👨‍🔧 Inspector Dashboard
-![Inspector](screenshots/inspector-dashboard.png)
+![Inspector](Screenshots/inspector-dashboard.png)
 
 ## 📝 Inspection Form
-![Form](screenshots/inspection-form.png)
+![Form](Screenshots/inspection-form.png)
 
 ## 📷 Camera & GPS Capture
-![Camera](screenshots/camera-capture.png)
+![Camera](Screenshots/camera-capture.png)
 
 ## 📶 Offline Mode
-![Offline](screenshots/offline-mode.png)
+![Offline](Screenshots/offline-mode.png)
 
 ## 👨‍💼 Admin Dashboard
-![Admin](screenshots/admin-dashboard.png)
+![Admin](Screenshots/admin-dashboard.png)
 
 ## 📋 Inspection Details
-![Details](screenshots/inspection-detail.png)
+![Details](Screenshots/inspection-detail.png)
 
 ## 🔁 Re‑Inspection Comparison
-![Reinspection](screenshots/reinspection-comparison.png)
+![Reinspection](Screenshots/reinspection-comparison.png)
 
 ## 📜 Audit History
-![Audit](screenshots/audit-history.png)
+![Audit](Screenshots/audit-history.png)
 
 ---
 
