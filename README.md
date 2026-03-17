@@ -141,7 +141,7 @@ The goal of this project is to build a **reliable field inspection platform** th
 ![Admin](Screenshots/admin-dashboard.PNG)
 
 ## 📋 Inspection Details
-![Details](Screenshots/inspection-detail.png)
+![Details](Screenshots/inspection-detail.PNG)
 
 ## 🔁 Re‑Inspection Comparison
 ![Reinspection](Screenshots/reinspection-comparison.PNG)
