@@ -1,6 +1,9 @@
 <p align="center">
   <h1 align="center">📋 Offline‑First Field Inspection PWA</h1>
   <p align="center">
+🚀 Offline-first inspection system with real-time sync, audit tracking, and re-inspection workflows.
+</p>
+  <p align="center">
     Progressive Web Application for Field Inspections with Offline Support, Admin Workflow, and Audit Logging
   </p>
 </p>
@@ -104,6 +107,16 @@ The goal of this project is to build a **reliable field inspection platform** th
 - Service Worker enabled  
 
 ---
+# ⭐ Key Highlights
+
+- Works **fully offline** using IndexedDB  
+- Auto-sync when internet is restored  
+- Real-world **inspection lifecycle workflow**  
+- Re‑inspection comparison system  
+- Role-based dashboards (Admin & Inspector)  
+- Progressive Web App (Installable)
+
+---
 
 # 🧠 How It Works
 
@@ -192,7 +205,7 @@ python app.py
 http://127.0.0.1:5000
 ```
 ---
-⚙️ How to Run:
+# ⚙️ How to Run:
 
 1️⃣ Clone Repository
 ```bash
@@ -221,8 +234,10 @@ python app.py
 http://127.0.0.1:5000
 ```
 ---
+
+# 📦 Project Structure
 ```bash
-📦 Project StructureOffline-First-Field-Inspection-PWA
+Offline-First-Field-Inspection-PWA
 │
 ├── inspection-management-system
 │ ├── routes
@@ -251,7 +266,18 @@ http://127.0.0.1:5000
 └── README.md
 ```
 ---
-🚀 Future Improvements:
+
+# 💡 Why This Project
+
+This project solves real-world problems where internet connectivity is unreliable, such as:
+- Rural infrastructure monitoring  
+- Government inspection systems  
+- Field audits  
+
+It ensures **data reliability, transparency, and continuity** even in offline environments.
+
+---
+# 🚀 Future Improvements:
 
 1. Mobile UI enhancements
 2. Image compression
@@ -260,14 +286,14 @@ http://127.0.0.1:5000
 5. Multi-department support
 6. Super Admin role
 ---
-🌐 Deployment
+# 🌐 Deployment
 Can be deployed on:
 1. Render
 2. Railway
 3. AWS
 4. DigitalOcean
 ---
-👨‍💻 Author
+# 👨‍💻 Author
 **Vivek S Suryawanshi**
 
 GitHub: https://github.com/VS7001
